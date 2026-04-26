@@ -133,6 +133,9 @@ local function dispatch(msg)
         local cat = map[target]
         if not cat then say("unknown test target: " .. target); return end
         if GBI.SoundPipeline then GBI.SoundPipeline.Fire(cat, { test = true }) end
+        if target == "interrupt" and GBI.Bar and GBI.Bar.TestInterruptFill then
+            GBI.Bar.TestInterruptFill(15)
+        end
         say("fired " .. cat .. " (silent if mode=off)")
         return
     end

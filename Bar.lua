@@ -469,6 +469,21 @@ function M.SetEnabled(on) if on then M.Show() else M.Hide() end end
 
 function M.GetInterruptAnchor() barInt.ensureAnchor(); return barInt.anchor end
 
+-- Visual test: drop a fake interrupt CD on every party slot so the row layout,
+-- progress bars, and resize controls can be tuned without an actual M+ run.
+function M.TestInterruptFill(durationS)
+    durationS = durationS or 15
+    local now = GetTime()
+    barInt.Show()
+    for _, unit in ipairs(K.PARTY_UNITS) do
+        barInt.OnCDStart(unit, 6552, {
+            startedAt = now,
+            endsAt    = now + durationS,
+            cdEntry   = { name = "Pummel", duration = durationS, category = K.CAT_INTERRUPT },
+        })
+    end
+end
+
 function M.RefreshLocked()
     if barInt.applyLocked then barInt.applyLocked() end
     if barCD.applyLocked  then barCD.applyLocked()  end

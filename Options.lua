@@ -366,6 +366,14 @@ local function buildPanel()
     barHeader:SetPoint("TOPLEFT", sliderSize, "BOTTOMLEFT", -24, -36)
     barHeader:SetText("Bar appearance")
 
+    local intFillBtn = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
+    intFillBtn:SetSize(180, 22)
+    intFillBtn:SetPoint("LEFT", barHeader, "RIGHT", 24, 0)
+    intFillBtn:SetText("Test interrupts (15s)")
+    intFillBtn:SetScript("OnClick", function()
+        if GBI.Bar and GBI.Bar.TestInterruptFill then GBI.Bar.TestInterruptFill(15) end
+    end)
+
     local function refreshBars()
         if GBI.Bar and GBI.Bar.RefreshLayout then GBI.Bar.RefreshLayout() end
     end
