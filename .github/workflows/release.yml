@@ -1,0 +1,20 @@
+name: Package and Release
+
+on:
+  push:
+    tags: ['v*']            # tag-driven release: git tag v0.1.0 && git push --tags
+  workflow_dispatch:        # also runnable manually from the Actions tab
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run BigWigsMods packager (CurseForge upload)
+        uses: BigWigsMods/packager@v2
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_TOKEN }}
+          GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}

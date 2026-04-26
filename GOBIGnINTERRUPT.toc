@@ -1,0 +1,40 @@
+## Interface: 120005
+## Title: GOBIGnINTERRUPT
+## Notes: 5-man Mythic+ party CD tracker with interrupt-halfway alert and configurable sounds.
+## Author: Tareksoh
+## Version: @project-version@
+## X-Curse-Project-ID: 1526129
+## SavedVariables: GOBIGnINTERRUPTDB
+## SavedVariablesPerCharacter: GOBIGnINTERRUPTLog
+## IconTexture: Interface\AddOns\GOBIGnINTERRUPT\icon\gobig.tga
+## X-Category: Combat
+
+# Foundational - no deps
+Log.lua
+Constants.lua
+Taint.lua
+Sounds.lua
+
+# Data
+Data_Interrupts.lua
+Data_Cooldowns.lua
+AuraMap.lua
+
+# Engine
+Inspect.lua
+CastTracker.lua
+Brain.lua
+Evidence.lua
+Interrupt.lua
+
+# UI
+Bar.lua
+UnitOverlay.lua
+KickCounter.lua
+MinimapIcon.lua
+SoundPipeline.lua
+
+# Entry
+GOBIGnINTERRUPT.lua
+Options.lua
+Slash.lua

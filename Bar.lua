@@ -1,0 +1,516 @@
+-- Two parallel bar windows:
+--   * BarInterrupts  - icons for K.CAT_INTERRUPT spells only
+--   * BarCooldowns   - everything else (defensives, big CDs, utility, dispel)
+--
+-- Each window has its own draggable anchor and saved position
+-- (DB.bars.interrupts / DB.bars.cooldowns).
+--
+-- Cooldown window is hidden when DB.unitOverlay.enabled is true; the
+-- UnitOverlay module then draws the cooldown icons on top of party frames.
+-- Interrupt window is always shown when the engine is enabled.
+--
+-- Public API (back-compat with Brain.lua):
+--   GBI.Bar.OnCDStart(unit, spellID, state)   - dispatched by category
+--   GBI.Bar.OnCDReady(unit, spellID, state)
+--   GBI.Bar.OnAllReady()
+--   GBI.Bar.Reset()
+--   GBI.Bar.Show() / Hide() / SetEnabled(bool)
+--   GBI.Bar.GetInterruptAnchor()  - for KickCounter to attach its label
+
+GOBIGnINTERRUPT = GOBIGnINTERRUPT or {}
+local GBI = GOBIGnINTERRUPT
+local K = GBI.K
+GBI.Bar = GBI.Bar or {}
+local M = GBI.Bar
+
+local ICON_BASE   = 32          -- base icon size before per-bar scale
+local ICON_GAP    = 4
+local ROW_GAP     = 6
+local NAME_WIDTH  = 80
+local DEFAULT_ICONS_PER_ROW = 8
+local GLOW_LEAD_S = 2            -- seconds before ready to start the glow pulse
+
+-- Optional Blizzard ActionButton overlay glow. Wrapped in pcall because the
+-- exact symbol moved between patches; if absent, glow is a no-op.
+local function showGlow(frame)
+    pcall(function()
+        if _G.ActionButton_ShowOverlayGlow then _G.ActionButton_ShowOverlayGlow(frame) end
+    end)
+end
+local function hideGlow(frame)
+    pcall(function()
+        if _G.ActionButton_HideOverlayGlow then _G.ActionButton_HideOverlayGlow(frame) end
+    end)
+end
+
+local function glowEnabled()
+    return GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.glow
+end
+
+local function log(level, ...) if GBI.Log then GBI.Log[level]("bar", ...) end end
+
+-- A "bar instance" packs the anchor + per-unit rows + icon pool for one
+-- category group. We build two of them.
+local function newBar(spec)
+    local self = {
+        spec     = spec,                    -- { key, title, defaultY, savedKey }
+        anchor   = nil,
+        rows     = {},                      -- unit -> rowFrame
+        icons    = {},                      -- unit -> { {icon, cooldown, spellID, endsAt}, ... }
+        scale    = 1.0,                     -- icon-size multiplier (per-bar)
+    }
+
+    local function saved() return GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.bars and GOBIGnINTERRUPTDB.bars[spec.key] or {} end
+    local function effIcon()    return math.floor(ICON_BASE * self.scale + 0.5) end
+    local function effRowH()    return effIcon() + 4 + (spec.progressBar and 11 or 0) end
+    local function effPerRow()  return saved().iconsPerRow or DEFAULT_ICONS_PER_ROW end
+    local function effGrowDir() return saved().growDir or "RIGHT" end
+    local function effPanelW()  return NAME_WIDTH + effPerRow() * (effIcon() + ICON_GAP) + 16 end
+    local function effPanelH()  return 16 + #K.PARTY_UNITS * (effRowH() + ROW_GAP) end
+
+    local function ensureRow(unit, idx)
+        if self.rows[unit] then return self.rows[unit] end
+        local row = CreateFrame("Frame", nil, self.anchor)
+        row:SetSize(effPanelW() - 16, effRowH())
+        row:SetPoint("TOPLEFT", self.anchor, "TOPLEFT", 8, -8 - (idx - 1) * (effRowH() + ROW_GAP))
+
+        if spec.progressBar then
+            -- Row-wide StatusBar behind everything; fills as the soonest CD
+            -- ticks down. Name + icons render on top.
+            local bar = CreateFrame("StatusBar", nil, row)
+            bar:SetAllPoints(row)
+            bar:SetStatusBarTexture("Interface\\TARGETINGFRAME\\UI-StatusBar")
+            bar:SetStatusBarColor(0.95, 0.55, 0.1, 0.85)
+            bar:SetMinMaxValues(0, 1); bar:SetValue(0)
+            local bg = bar:CreateTexture(nil, "BACKGROUND"); bg:SetAllPoints(bar)
+            bg:SetColorTexture(0, 0, 0, 0.45)
+            bar.text = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            bar.text:SetPoint("RIGHT", bar, "RIGHT", -4, 0)
+            row.progBar = bar
+            row.bg = bg                              -- backwards compat
+            bar:SetScript("OnUpdate", function(self, elapsed)
+                self.acc = (self.acc or 0) + elapsed
+                if self.acc < 0.1 then return end
+                self.acc = 0
+                -- find the soonest-ending shown icon
+                local soonestStart, soonestEnd
+                for _, e in ipairs(self.iconList or {}) do
+                    if e.icon:IsShown() and e.endsAt then
+                        if not soonestEnd or e.endsAt < soonestEnd then
+                            soonestStart = e.startedAt or self.startedAt or 0
+                            soonestEnd   = e.endsAt
+                        end
+                    end
+                end
+                local now = GetTime()
+                if not soonestEnd or soonestEnd <= now then
+                    self:SetValue(0); self.text:SetText(""); return
+                end
+                local total = math.max(0.1, soonestEnd - (soonestStart or now))
+                self:SetMinMaxValues(0, total)
+                self:SetValue(now - (soonestStart or now))
+                local rem = soonestEnd - now
+                self.text:SetText(rem >= 10 and ("%d"):format(rem) or ("%.1f"):format(rem))
+            end)
+        else
+            row.bg = row:CreateTexture(nil, "BACKGROUND")
+            row.bg:SetAllPoints(row)
+            row.bg:SetColorTexture(0, 0, 0, 0.35)
+        end
+
+        row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        row.name:SetPoint("LEFT", row, "LEFT", 4, 0)
+        row.name:SetWidth(NAME_WIDTH)
+        row.name:SetJustifyH("LEFT")
+
+        self.rows[unit] = row
+        self.icons[unit] = {}
+        if row.progBar then row.progBar.iconList = self.icons[unit] end
+        return row
+    end
+
+    local function refreshNames()
+        for _, unit in ipairs(K.PARTY_UNITS) do
+            local row = self.rows[unit]
+            if row then
+                local name = UnitExists(unit) and (UnitName(unit) or unit) or "(empty)"
+                local _, classToken = UnitClass(unit)
+                if classToken and RAID_CLASS_COLORS and RAID_CLASS_COLORS[classToken] then
+                    local c = RAID_CLASS_COLORS[classToken]
+                    row.name:SetText(("|cff%02x%02x%02x%s|r"):format(c.r * 255, c.g * 255, c.b * 255, name))
+                else
+                    row.name:SetText(name)
+                end
+            end
+        end
+    end
+    self.refreshNames = refreshNames
+
+    local function ensureAnchor()
+        if self.anchor then return self.anchor end
+        local frameName = "GOBIGnINTERRUPT_Anchor_" .. spec.key
+        self.anchor = CreateFrame("Frame", frameName, UIParent, "BackdropTemplate")
+        self.anchor:SetSize(effPanelW(), effPanelH())
+        self.anchor:SetPoint("CENTER", UIParent, "CENTER", 0, spec.defaultY)
+        self.anchor:SetMovable(true)
+        self.anchor:EnableMouse(true)
+        self.anchor:RegisterForDrag("LeftButton")
+        self.anchor:SetScript("OnDragStart", function(s)
+            if not GOBIGnINTERRUPTDB or not GOBIGnINTERRUPTDB.locked then s:StartMoving() end
+        end)
+        self.anchor:SetScript("OnDragStop", function(s)
+            s:StopMovingOrSizing()
+            local p, _, rp, x, y = s:GetPoint()
+            GOBIGnINTERRUPTDB = GOBIGnINTERRUPTDB or {}
+            GOBIGnINTERRUPTDB.bars = GOBIGnINTERRUPTDB.bars or {}
+            GOBIGnINTERRUPTDB.bars[spec.key] = { p = p, rp = rp, x = x, y = y }
+        end)
+        if self.anchor.SetBackdrop then
+            self.anchor:SetBackdrop({
+                bgFile   = "Interface\\Buttons\\WHITE8x8",
+                edgeFile = "Interface\\Buttons\\WHITE8x8",
+                edgeSize = 1,
+            })
+            self.anchor:SetBackdropColor(0, 0, 0, 0.55)
+            self.anchor:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+        end
+
+        local title = self.anchor:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        title:SetPoint("BOTTOMLEFT", self.anchor, "TOPLEFT", 4, 2)
+        title:SetText(spec.title)
+        self.anchor.title = title
+
+        -- Resize grip: drag horizontally to change icon size + panel size
+        -- (does NOT use SetScale — affects real frame dimensions instead).
+        local grip = CreateFrame("Frame", nil, self.anchor)
+        grip:SetSize(14, 14)
+        grip:SetPoint("BOTTOMRIGHT", self.anchor, "BOTTOMRIGHT", -2, 2)
+        grip:EnableMouse(true)
+        local gtex = grip:CreateTexture(nil, "OVERLAY")
+        gtex:SetAllPoints(grip)
+        gtex:SetTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+        grip:SetScript("OnMouseDown", function(s)
+            s.dragging = true
+            s.startX = GetCursorPosition()
+            s.startScale = self.scale
+        end)
+        grip:SetScript("OnMouseUp", function(s)
+            s.dragging = false
+            GOBIGnINTERRUPTDB.bars = GOBIGnINTERRUPTDB.bars or {}
+            GOBIGnINTERRUPTDB.bars[spec.key] = GOBIGnINTERRUPTDB.bars[spec.key] or {}
+            GOBIGnINTERRUPTDB.bars[spec.key].scale = self.scale
+        end)
+        grip:SetScript("OnUpdate", function(s)
+            if not s.dragging then return end
+            local x = GetCursorPosition()
+            local delta = (x - s.startX) / 200
+            local ns = math.max(0.5, math.min(2.5, s.startScale + delta))
+            if math.abs(ns - self.scale) >= 0.01 then
+                self.scale = ns
+                if self.applyScale then self.applyScale() end
+            end
+        end)
+        self.anchor.grip = grip
+
+        for i, unit in ipairs(K.PARTY_UNITS) do ensureRow(unit, i) end
+        refreshNames()
+        if self.applyLocked then self.applyLocked() end
+        return self.anchor
+    end
+
+    -- When the anchor is locked, hide chrome (background, border, title,
+    -- resize grip, row backgrounds) so the bar is just floating icons.
+    function self.applyLocked()
+        if not self.anchor then return end
+        local locked = GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.locked
+        if self.anchor.SetBackdrop then
+            if locked then
+                self.anchor:SetBackdrop(nil)
+            else
+                self.anchor:SetBackdrop({
+                    bgFile   = "Interface\\Buttons\\WHITE8x8",
+                    edgeFile = "Interface\\Buttons\\WHITE8x8",
+                    edgeSize = 1,
+                })
+                self.anchor:SetBackdropColor(0, 0, 0, 0.55)
+                self.anchor:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+            end
+        end
+        if self.anchor.title then
+            if locked then self.anchor.title:Hide() else self.anchor.title:Show() end
+        end
+        if self.anchor.grip then
+            if locked then self.anchor.grip:Hide() else self.anchor.grip:Show() end
+        end
+        for _, unit in ipairs(K.PARTY_UNITS) do
+            local row = self.rows[unit]
+            if row and row.bg then
+                if locked then row.bg:Hide() else row.bg:Show() end
+            end
+            if row and row.name then
+                if locked then row.name:Hide() else row.name:Show() end
+            end
+        end
+        self.anchor:EnableMouse(not locked)
+    end
+    self.ensureAnchor = ensureAnchor
+
+    local function restorePosition()
+        local saved = GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.bars and GOBIGnINTERRUPTDB.bars[spec.key]
+        if not (self.anchor and saved) then return end
+        if saved.p and saved.x and saved.y then
+            self.anchor:ClearAllPoints()
+            self.anchor:SetPoint(saved.p, UIParent, saved.rp or saved.p, saved.x, saved.y)
+        end
+        if saved.scale and saved.scale > 0 then
+            self.scale = math.max(0.5, math.min(2.5, saved.scale))
+            self.applyScale()
+        end
+    end
+
+    local function expireIcons()
+        local now = GetTime()
+        local glowOn = glowEnabled()
+        for _, units in pairs(self.icons) do
+            for i = #units, 1, -1 do
+                local entry = units[i]
+                if entry.endsAt and entry.endsAt <= now then
+                    if entry.glowing then hideGlow(entry.icon); entry.glowing = false end
+                    entry.icon:Hide()
+                    table.remove(units, i)
+                elseif glowOn and entry.endsAt and (entry.endsAt - now) <= GLOW_LEAD_S then
+                    if not entry.glowing then showGlow(entry.icon); entry.glowing = true end
+                elseif entry.glowing and not glowOn then
+                    hideGlow(entry.icon); entry.glowing = false
+                end
+            end
+        end
+    end
+    self.expireIcons = expireIcons
+
+    function self.Show()
+        ensureAnchor(); restorePosition(); self.anchor:Show(); refreshNames()
+        if self.applyLocked then self.applyLocked() end
+    end
+    function self.Hide()
+        if self.anchor then self.anchor:Hide() end
+    end
+    function self.Reset()
+        if not self.anchor then return end
+        for unit, list in pairs(self.icons) do
+            for _, e in ipairs(list) do
+                e.icon:Hide()
+            end
+            self.icons[unit] = {}
+        end
+    end
+
+    function self.applyScale()
+        if not self.anchor then return end
+        self.anchor:SetSize(effPanelW(), effPanelH())
+        for i, unit in ipairs(K.PARTY_UNITS) do
+            local row = self.rows[unit]
+            if row then
+                row:SetSize(effPanelW() - 16, effRowH())
+                row:ClearAllPoints()
+                row:SetPoint("TOPLEFT", self.anchor, "TOPLEFT",
+                    8, -8 - (i - 1) * (effRowH() + ROW_GAP))
+            end
+            local list = self.icons[unit] or {}
+            for _, e in ipairs(list) do
+                e.icon:SetSize(effIcon(), effIcon())
+            end
+        end
+        -- relayout visible icons in each row (with wrap + grow direction)
+        for unit, list in pairs(self.icons) do
+            local visible = {}
+            for _, e in ipairs(list) do if e.icon:IsShown() then visible[#visible+1] = e end end
+            table.sort(visible, function(a, b) return (a.endsAt or 0) < (b.endsAt or 0) end)
+            local row = self.rows[unit]
+            local perRow = effPerRow()
+            local stride = effIcon() + ICON_GAP
+            local grow = effGrowDir()
+            for i, e in ipairs(visible) do
+                e.icon:ClearAllPoints()
+                local col = (i - 1) % perRow
+                local subRow = math.floor((i - 1) / perRow)
+                local x = NAME_WIDTH + 4 + col * stride
+                if grow == "LEFT" then
+                    e.icon:SetPoint("RIGHT", row, "RIGHT", -col * stride, -subRow * stride)
+                else
+                    e.icon:SetPoint("LEFT", row, "LEFT", x, -subRow * stride)
+                end
+            end
+        end
+    end
+
+    function self.OnCDStart(unit, spellID, state)
+        ensureAnchor()
+        local row = self.rows[unit]
+        if not row then return end
+
+        local list = self.icons[unit]
+        local entry
+        for _, e in ipairs(list) do
+            if not e.icon:IsShown() then entry = e; break end
+        end
+        if not entry then
+            local icon = CreateFrame("Frame", nil, row)
+            icon:SetSize(effIcon(), effIcon())
+            local t = icon:CreateTexture(nil, "ARTWORK")
+            t:SetAllPoints(icon)
+            icon.tex = t
+            local cd = CreateFrame("Cooldown", nil, icon, "CooldownFrameTemplate")
+            cd:SetAllPoints(icon)
+            icon.cooldown = cd
+            entry = { icon = icon, cooldown = cd, spellID = nil, endsAt = nil }
+            table.insert(list, entry)
+        end
+
+        entry.spellID   = spellID
+        entry.startedAt = state.startedAt
+        entry.endsAt    = state.endsAt
+        local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellID)
+        local iconPath = info and info.iconID or "Interface\\Icons\\INV_Misc_QuestionMark"
+        entry.icon.tex:SetTexture(iconPath)
+        entry.cooldown:SetCooldown(state.startedAt, state.endsAt - state.startedAt)
+        entry.icon:Show()
+
+        local visible = {}
+        for _, e in ipairs(list) do
+            if e.icon:IsShown() then visible[#visible + 1] = e end
+        end
+        table.sort(visible, function(a, b) return (a.endsAt or 0) < (b.endsAt or 0) end)
+        local perRow = effPerRow()
+        local stride = effIcon() + ICON_GAP
+        local grow = effGrowDir()
+        for i, e in ipairs(visible) do
+            e.icon:ClearAllPoints()
+            local col = (i - 1) % perRow
+            local subRow = math.floor((i - 1) / perRow)
+            if grow == "LEFT" then
+                e.icon:SetPoint("RIGHT", row, "RIGHT", -col * stride, -subRow * stride)
+            else
+                e.icon:SetPoint("LEFT", row, "LEFT",
+                    NAME_WIDTH + 4 + col * stride, -subRow * stride)
+            end
+        end
+    end
+
+    function self.OnCDReady(unit, spellID)
+        local list = self.icons[unit] or {}
+        for _, e in ipairs(list) do
+            if e.spellID == spellID then
+                e.icon:Hide()
+                return
+            end
+        end
+    end
+
+    return self
+end
+
+-- Two instances ------------------------------------------------------------
+
+local barInt = newBar({ key = "interrupts", title = "GBI Interrupts", defaultY = 160, progressBar = true })
+local barCD  = newBar({ key = "cooldowns",  title = "GBI Cooldowns",  defaultY = 60  })
+
+local function unitOverlayActive()
+    return GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.unitOverlay
+        and GOBIGnINTERRUPTDB.unitOverlay.enabled
+        and GBI.UnitOverlay
+end
+
+local function dispatch(state, fnName, unit, spellID)
+    local cdEntry = state.cdEntry
+    if not cdEntry then return end
+    if cdEntry.category == K.CAT_INTERRUPT then
+        barInt[fnName](unit, spellID, state)
+    else
+        if unitOverlayActive() then
+            local ov = GBI.UnitOverlay
+            if ov[fnName] then ov[fnName](unit, spellID, state) end
+        else
+            barCD[fnName](unit, spellID, state)
+        end
+    end
+end
+
+function M.OnCDStart(unit, spellID, state) dispatch(state, "OnCDStart", unit, spellID) end
+function M.OnCDReady(unit, spellID, state) dispatch(state, "OnCDReady", unit, spellID) end
+
+function M.OnAllReady()
+    -- visual ping on the cooldown bar/overlay (subtle flash). Phase 2: TBD.
+end
+
+function M.Reset()
+    barInt.Reset(); barCD.Reset()
+    if GBI.UnitOverlay and GBI.UnitOverlay.Reset then GBI.UnitOverlay.Reset() end
+    if GBI.KickCounter and GBI.KickCounter.Reset then GBI.KickCounter.Reset() end
+end
+
+function M.Show()
+    barInt.Show()
+    if unitOverlayActive() then
+        barCD.Hide()
+        if GBI.UnitOverlay and GBI.UnitOverlay.Show then GBI.UnitOverlay.Show() end
+    else
+        barCD.Show()
+        if GBI.UnitOverlay and GBI.UnitOverlay.Hide then GBI.UnitOverlay.Hide() end
+    end
+end
+
+function M.Hide()
+    barInt.Hide(); barCD.Hide()
+    if GBI.UnitOverlay and GBI.UnitOverlay.Hide then GBI.UnitOverlay.Hide() end
+end
+
+function M.SetEnabled(on) if on then M.Show() else M.Hide() end end
+
+function M.GetInterruptAnchor() barInt.ensureAnchor(); return barInt.anchor end
+
+function M.RefreshLocked()
+    if barInt.applyLocked then barInt.applyLocked() end
+    if barCD.applyLocked  then barCD.applyLocked()  end
+end
+
+function M.ApplyAllBars()
+    -- Re-read scale from saved-vars and reflow icons per the new layout cfg.
+    local function syncAndApply(b)
+        local s = (GOBIGnINTERRUPTDB.bars or {})[b.spec.key]
+        if s and s.scale and s.scale > 0 then
+            b.scale = math.max(0.5, math.min(2.5, s.scale))
+        end
+        if b.applyScale then b.applyScale() end
+    end
+    syncAndApply(barInt); syncAndApply(barCD)
+end
+
+-- Re-evaluate cooldown-window vs unit-overlay when the option flips.
+function M.RefreshLayout()
+    if barInt.anchor and barInt.anchor:IsShown() then
+        if unitOverlayActive() then
+            barCD.Hide()
+            if GBI.UnitOverlay and GBI.UnitOverlay.Show then GBI.UnitOverlay.Show() end
+        else
+            barCD.Show()
+            if GBI.UnitOverlay and GBI.UnitOverlay.Hide then GBI.UnitOverlay.Hide() end
+        end
+    end
+end
+
+local rf = CreateFrame("Frame", "GOBIGnINTERRUPT_BarRosterFrame")
+rf:RegisterEvent("GROUP_ROSTER_UPDATE")
+rf:RegisterEvent("UNIT_NAME_UPDATE")
+rf:SetScript("OnEvent", function()
+    if barInt.anchor then barInt.refreshNames() end
+    if barCD.anchor  then barCD.refreshNames()  end
+end)
+
+local tk = CreateFrame("Frame", "GOBIGnINTERRUPT_BarTickerFrame")
+tk:SetScript("OnUpdate", function(self, elapsed)
+    self.acc = (self.acc or 0) + elapsed
+    if self.acc < 0.5 then return end
+    self.acc = 0
+    barInt.expireIcons(); barCD.expireIcons()
+end)
