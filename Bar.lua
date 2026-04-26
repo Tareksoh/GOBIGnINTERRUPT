@@ -96,8 +96,6 @@ local function newBar(spec)
             bg:SetColorTexture(0, 0, 0, 0.45)
             -- Countdown text comes from the icon's CooldownFrameTemplate
             -- (OmniCC-compatible). No separate bar text — keeps the bar clean.
-            bar.text = bar:CreateFontString(nil, "OVERLAY")
-            bar.text:Hide()
             row.progBar = bar
             row.bg = bg                              -- backwards compat
             bar:SetScript("OnUpdate", function(self, elapsed)
@@ -126,13 +124,12 @@ local function newBar(spec)
                 end
 
                 if not soonestEnd or soonestEnd <= now then
-                    self:SetValue(0); self.text:SetText(""); return
+                    self:SetValue(0); return
                 end
                 local total = math.max(0.1, soonestEnd - (soonestStart or now))
                 local rem = soonestEnd - now
                 self:SetMinMaxValues(0, total)
                 self:SetValue(rem)
-                self.text:SetText(rem >= 10 and ("%d"):format(rem) or ("%.1f"):format(rem))
             end)
         else
             row.bg = row:CreateTexture(nil, "BACKGROUND")
