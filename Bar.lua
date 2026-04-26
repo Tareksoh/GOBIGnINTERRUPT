@@ -94,8 +94,10 @@ local function newBar(spec)
             bar:SetMinMaxValues(0, 1); bar:SetValue(0)
             local bg = bar:CreateTexture(nil, "BACKGROUND"); bg:SetAllPoints(bar)
             bg:SetColorTexture(0, 0, 0, 0.45)
-            bar.text = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            bar.text:SetPoint("RIGHT", bar, "RIGHT", -4, 0)
+            -- Countdown text comes from the icon's CooldownFrameTemplate
+            -- (OmniCC-compatible). No separate bar text — keeps the bar clean.
+            bar.text = bar:CreateFontString(nil, "OVERLAY")
+            bar.text:Hide()
             row.progBar = bar
             row.bg = bg                              -- backwards compat
             bar:SetScript("OnUpdate", function(self, elapsed)
@@ -467,7 +469,12 @@ local function newBar(spec)
         local list = self.icons[unit] or {}
         for _, e in ipairs(list) do
             if e.spellID == spellID then
-                e.icon:Hide()
+                if spec.progressBar then
+                    -- Interrupt row: keep icon, mark ready, expireIcons will glow it.
+                    e.endsAt = GetTime() - 0.01
+                else
+                    e.icon:Hide()
+                end
                 return
             end
         end
