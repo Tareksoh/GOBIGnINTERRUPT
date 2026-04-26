@@ -84,10 +84,10 @@ local function newBar(spec)
         row:SetPoint("TOPLEFT", self.anchor, "TOPLEFT", 8, -8 - (idx - 1) * (effRowH() + ROW_GAP))
 
         if spec.progressBar then
-            -- Bar in the lower portion; name fills the strip above it.
+            -- Bar fills the right portion of the row; name strip sits to its left.
             local bar = CreateFrame("StatusBar", nil, row)
-            bar:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
-            bar:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
+            bar:SetPoint("LEFT", row, "LEFT", NAME_WIDTH, 0)
+            bar:SetPoint("RIGHT", row, "RIGHT", 0, 0)
             bar:SetHeight(effIcon() + 4)
             bar:SetStatusBarTexture("Interface\\TARGETINGFRAME\\UI-StatusBar")
             bar:SetStatusBarColor(0.15, 0.55, 0.85, 0.85)   -- neutral teal-blue, no class collision
@@ -140,10 +140,10 @@ local function newBar(spec)
 
         row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         if spec.progressBar then
-            -- Name overlays the bar, left-aligned, with a black outline so
-            -- class colors stay legible regardless of bar fill color.
-            row.name:SetPoint("LEFT", row.progBar, "LEFT", 6, 0)
-            row.name:SetJustifyH("LEFT")
+            -- Name strip to the LEFT of the bar.
+            row.name:SetPoint("LEFT", row, "LEFT", 4, 0)
+            row.name:SetPoint("RIGHT", row.progBar, "LEFT", -4, 0)
+            row.name:SetJustifyH("RIGHT")
             local f, sz = row.name:GetFont()
             if f then row.name:SetFont(f, sz or 12, "OUTLINE") end
         else
@@ -159,18 +159,34 @@ local function newBar(spec)
     end
 
     local function refreshNames()
+        local visibleIdx = 0
         for _, unit in ipairs(K.PARTY_UNITS) do
             local row = self.rows[unit]
             if row then
-                local name = UnitExists(unit) and (UnitName(unit) or unit) or "(empty)"
-                local _, classToken = UnitClass(unit)
-                if classToken and RAID_CLASS_COLORS and RAID_CLASS_COLORS[classToken] then
-                    local c = RAID_CLASS_COLORS[classToken]
-                    row.name:SetText(("|cff%02x%02x%02x%s|r"):format(c.r * 255, c.g * 255, c.b * 255, name))
+                if UnitExists(unit) then
+                    local name = UnitName(unit) or unit
+                    local _, classToken = UnitClass(unit)
+                    if classToken and RAID_CLASS_COLORS and RAID_CLASS_COLORS[classToken] then
+                        local c = RAID_CLASS_COLORS[classToken]
+                        row.name:SetText(("|cff%02x%02x%02x%s|r"):format(c.r * 255, c.g * 255, c.b * 255, name))
+                    else
+                        row.name:SetText(name)
+                    end
+                    row:Show()
+                    -- repack visible rows to top of panel
+                    row:ClearAllPoints()
+                    row:SetPoint("TOPLEFT", self.anchor, "TOPLEFT",
+                        8, -8 - visibleIdx * (effRowH() + ROW_GAP))
+                    visibleIdx = visibleIdx + 1
                 else
-                    row.name:SetText(name)
+                    row:Hide()
                 end
             end
+        end
+        -- shrink panel to fit only visible rows
+        if self.anchor then
+            local h = math.max(16 + visibleIdx * (effRowH() + ROW_GAP), effRowH() + 24)
+            self.anchor:SetHeight(h)
         end
     end
     self.refreshNames = refreshNames
@@ -301,7 +317,12 @@ local function newBar(spec)
         for _, units in pairs(self.icons) do
             for i = #units, 1, -1 do
                 local entry = units[i]
-                if entry.endsAt and entry.endsAt <= now then
+                local expired = entry.endsAt and entry.endsAt <= now
+                if expired and spec.progressBar then
+                    -- Interrupt window: keep the icon visible and glow it
+                    -- to indicate the spell is ready and off cooldown.
+                    if not entry.glowing then showGlow(entry.icon); entry.glowing = true end
+                elseif expired then
                     if entry.glowing then hideGlow(entry.icon); entry.glowing = false end
                     entry.icon:Hide()
                     table.remove(units, i)
@@ -384,8 +405,15 @@ local function newBar(spec)
 
         local list = self.icons[unit]
         local entry
+        -- Reuse existing entry for the same spell first (interrupt rows
+        -- keep entries around in "ready, glowing" state).
         for _, e in ipairs(list) do
-            if not e.icon:IsShown() then entry = e; break end
+            if e.spellID == spellID then entry = e; break end
+        end
+        if not entry then
+            for _, e in ipairs(list) do
+                if not e.icon:IsShown() then entry = e; break end
+            end
         end
         if not entry then
             local icon = CreateFrame("Frame", nil, row)
@@ -408,6 +436,7 @@ local function newBar(spec)
         entry.icon.tex:SetTexture(iconPath)
         entry.cooldown:SetCooldown(state.startedAt, state.endsAt - state.startedAt)
         entry.icon:Show()
+        if entry.glowing then hideGlow(entry.icon); entry.glowing = false end
 
         if spec.progressBar then
             -- Bar's OnUpdate positions icons along the fill edge; skip default layout.
