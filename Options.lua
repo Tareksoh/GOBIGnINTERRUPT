@@ -315,7 +315,7 @@ local function buildPanel()
         local txt = _G[s:GetName() .. "Text"]
         txt:SetText(label)
         s:SetScript("OnShow", function(self)
-            local def = (key == "iconSize") and 28 or 0
+            local def = ({ iconSize = 28, iconGap = 2 })[key] or 0
             self:SetValue((db().unitOverlay and db().unitOverlay[key]) or def)
         end)
         s:SetScript("OnValueChanged", function(self, v)
@@ -330,7 +330,8 @@ local function buildPanel()
 
     local sliderX = mkOffsetSlider(sideLabel, -28, "offsetX", "X offset", -200, 200)
     local sliderY = mkOffsetSlider(sliderX,   -22, "offsetY", "Y offset", -200, 200)
-    local sliderSize = mkOffsetSlider(sliderY, -22, "iconSize", "Overlay icon size", 16, 64)
+    local sliderSize = mkOffsetSlider(sliderY,    -22, "iconSize", "Overlay icon size", 16, 64)
+    local sliderGap  = mkOffsetSlider(sliderSize, -22, "iconGap",  "Icon spacing",       0, 20)
 
     -- test-mode toggle button (sits next to sliders)
     local testBtn = CreateFrame("Button", nil, content,"UIPanelButtonTemplate")
@@ -363,7 +364,7 @@ local function buildPanel()
 
     -- ============= 1.5 Bar appearance (per-window) ============= --
     local barHeader = content:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    barHeader:SetPoint("TOPLEFT", sliderSize, "BOTTOMLEFT", -24, -36)
+    barHeader:SetPoint("TOPLEFT", sliderGap, "BOTTOMLEFT", -24, -36)
     barHeader:SetText("Bar appearance")
 
     local intFillBtn = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")

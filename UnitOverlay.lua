@@ -22,12 +22,16 @@ local K = GBI.K
 GBI.UnitOverlay = GBI.UnitOverlay or {}
 local M = GBI.UnitOverlay
 
-local ICON_GAP  = 2
 local MAX_ICONS = 6
 
 local function ICON_SIZE()
     local d = (GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.unitOverlay) or {}
     return d.iconSize or 28
+end
+
+local function ICON_GAP()
+    local d = (GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.unitOverlay) or {}
+    return d.iconGap or 2
 end
 
 local function log(level, ...) if GBI.Log then GBI.Log[level]("overlay", ...) end end
@@ -62,7 +66,7 @@ function M.Refresh()
     local sz = ICON_SIZE()
     for _, c in pairs(containers) do
         if c.container and c.host then
-            c.container:SetSize(MAX_ICONS * (sz + ICON_GAP), sz)
+            c.container:SetSize(MAX_ICONS * (sz + ICON_GAP()), sz)
             for _, e in ipairs(c.icons) do e.icon:SetSize(sz, sz) end
             for _, e in ipairs(c.testIcons or {}) do e.icon:SetSize(sz, sz) end
             M.ApplyAnchor(c.container, c.host)
@@ -131,7 +135,7 @@ local function ensureContainer(unit)
     if c and c.container then c.container:Hide(); c.container:SetParent(nil) end
 
     local container = CreateFrame("Frame", nil, host)
-    container:SetSize(MAX_ICONS * (ICON_SIZE() + ICON_GAP), ICON_SIZE())
+    container:SetSize(MAX_ICONS * (ICON_SIZE() + ICON_GAP()), ICON_SIZE())
     container:SetFrameStrata("HIGH")
     container:Show()
     M.ApplyAnchor(container, host)
@@ -181,13 +185,13 @@ local function relayout(c)
         e.icon:ClearAllPoints()
         if side == "LEFT" then
             e.icon:SetPoint("RIGHT", c.container, "RIGHT",
-                -(i - 1) * (ICON_SIZE() + ICON_GAP), 0)
+                -(i - 1) * (ICON_SIZE() + ICON_GAP()), 0)
         elseif side == "TOP" then
             e.icon:SetPoint("BOTTOMLEFT", c.container, "BOTTOMLEFT",
-                (i - 1) * (ICON_SIZE() + ICON_GAP), 0)
+                (i - 1) * (ICON_SIZE() + ICON_GAP()), 0)
         else  -- BOTTOM or RIGHT: anchor LEFT, grow rightward
             e.icon:SetPoint("LEFT", c.container, "LEFT",
-                (i - 1) * (ICON_SIZE() + ICON_GAP), 0)
+                (i - 1) * (ICON_SIZE() + ICON_GAP()), 0)
         end
     end
 end
@@ -274,13 +278,13 @@ local function applyTestVisuals(c, on)
             local side = (anchorCfg())
             if side == "LEFT" then
                 entry.icon:SetPoint("RIGHT", c.container, "RIGHT",
-                    -(i - 1) * (ICON_SIZE() + ICON_GAP), 0)
+                    -(i - 1) * (ICON_SIZE() + ICON_GAP()), 0)
             elseif side == "TOP" then
                 entry.icon:SetPoint("BOTTOMLEFT", c.container, "BOTTOMLEFT",
-                    (i - 1) * (ICON_SIZE() + ICON_GAP), 0)
+                    (i - 1) * (ICON_SIZE() + ICON_GAP()), 0)
             else
                 entry.icon:SetPoint("LEFT", c.container, "LEFT",
-                    (i - 1) * (ICON_SIZE() + ICON_GAP), 0)
+                    (i - 1) * (ICON_SIZE() + ICON_GAP()), 0)
             end
             entry.icon:Show()
         end
