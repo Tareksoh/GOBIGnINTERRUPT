@@ -63,9 +63,16 @@ local function newBar(spec)
     local function saved() return GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.bars and GOBIGnINTERRUPTDB.bars[spec.key] or {} end
     local function effIcon()    return math.floor(ICON_BASE * self.scale + 0.5) end
     local function effRowH()    return effIcon() + 4 + (spec.progressBar and 11 or 0) end
-    local function effPerRow()  return saved().iconsPerRow or DEFAULT_ICONS_PER_ROW end
+    local function effPerRow()
+        if spec.progressBar then return 6 end   -- interrupts: enough slots, panel width is fixed
+        return saved().iconsPerRow or DEFAULT_ICONS_PER_ROW
+    end
     local function effGrowDir() return saved().growDir or "RIGHT" end
-    local function effPanelW()  return NAME_WIDTH + effPerRow() * (effIcon() + ICON_GAP) + 16 end
+    local function effBarWidth() return saved().barWidth or 220 end
+    local function effPanelW()
+        if spec.progressBar then return NAME_WIDTH + effBarWidth() + 16 end
+        return NAME_WIDTH + effPerRow() * (effIcon() + ICON_GAP) + 16
+    end
     local function effPanelH()  return 16 + #K.PARTY_UNITS * (effRowH() + ROW_GAP) end
 
     local function ensureRow(unit, idx)
@@ -107,9 +114,9 @@ local function newBar(spec)
                     self:SetValue(0); self.text:SetText(""); return
                 end
                 local total = math.max(0.1, soonestEnd - (soonestStart or now))
-                self:SetMinMaxValues(0, total)
-                self:SetValue(now - (soonestStart or now))
                 local rem = soonestEnd - now
+                self:SetMinMaxValues(0, total)
+                self:SetValue(rem)              -- fill = remaining, empties to 0
                 self.text:SetText(rem >= 10 and ("%d"):format(rem) or ("%.1f"):format(rem))
             end)
         else

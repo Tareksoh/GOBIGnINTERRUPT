@@ -386,7 +386,7 @@ local function buildPanel()
         if GBI.Bar and GBI.Bar.ApplyAllBars then GBI.Bar.ApplyAllBars() end
     end
 
-    local function makeBarControls(parent, anchorTo, dy, key, label)
+    local function makeBarControls(parent, anchorTo, dy, key, label, isProgressBar)
         local lbl = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         lbl:SetPoint("TOPLEFT", anchorTo, "BOTTOMLEFT", 0, dy)
         lbl:SetText(label)
@@ -409,53 +409,79 @@ local function buildPanel()
             applyBarSizeChange(key, v)
         end)
 
-        -- Icons per row
-        local pr = CreateFrame("Slider", "GBIBarPerRow_" .. key, parent, "OptionsSliderTemplate")
-        pr:SetPoint("TOPLEFT", sz, "BOTTOMLEFT", 0, -22)
-        pr:SetWidth(180); pr:SetMinMaxValues(1, 20); pr:SetValueStep(1); pr:SetObeyStepOnDrag(true)
-        _G[pr:GetName() .. "Low"]:SetText("1")
-        _G[pr:GetName() .. "High"]:SetText("20")
-        local prTxt = _G[pr:GetName() .. "Text"]
-        pr:SetScript("OnShow", function(s)
-            local saved = (db().bars or {})[key] or {}
-            local n = saved.iconsPerRow or 8
-            s:SetValue(n); prTxt:SetText("Icons per row: " .. n)
-        end)
-        pr:SetScript("OnValueChanged", function(s, v)
-            v = math.floor(v + 0.5)
-            prTxt:SetText("Icons per row: " .. v)
-            db().bars = db().bars or {}; db().bars[key] = db().bars[key] or {}
-            db().bars[key].iconsPerRow = v
-            if GBI.Bar and GBI.Bar.ApplyAllBars then GBI.Bar.ApplyAllBars() end
-        end)
+        local lastSlider = sz
 
-        -- Grow direction
-        local gdLbl = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        gdLbl:SetPoint("LEFT", pr, "RIGHT", 32, 0)
-        gdLbl:SetText("Grow")
-        local gd = CreateFrame("DropdownButton", nil, parent, "WowStyle1DropdownTemplate")
-        gd:SetPoint("LEFT", gdLbl, "RIGHT", 6, 0); gd:SetWidth(110)
-        local function curGrow()
-            local saved = (db().bars or {})[key] or {}
-            return saved.growDir or "RIGHT"
-        end
-        gd:SetupMenu(function(_, root)
-            for _, dir in ipairs({ "RIGHT", "LEFT" }) do
-                root:CreateRadio(dir, function() return curGrow() == dir end, function()
-                    db().bars = db().bars or {}; db().bars[key] = db().bars[key] or {}
-                    db().bars[key].growDir = dir
-                    if GBI.Bar and GBI.Bar.ApplyAllBars then GBI.Bar.ApplyAllBars() end
-                    gd:GenerateMenu()
-                end)
+        if isProgressBar then
+            -- Bar window: use a bar-width slider instead of icons-per-row.
+            local bw = CreateFrame("Slider", "GBIBarWidth_" .. key, parent, "OptionsSliderTemplate")
+            bw:SetPoint("TOPLEFT", sz, "BOTTOMLEFT", 0, -22)
+            bw:SetWidth(180); bw:SetMinMaxValues(120, 600); bw:SetValueStep(10); bw:SetObeyStepOnDrag(true)
+            _G[bw:GetName() .. "Low"]:SetText("120")
+            _G[bw:GetName() .. "High"]:SetText("600")
+            local bwTxt = _G[bw:GetName() .. "Text"]
+            bw:SetScript("OnShow", function(s)
+                local sv = (db().bars or {})[key] or {}
+                local n = sv.barWidth or 220
+                s:SetValue(n); bwTxt:SetText("Bar width: " .. n)
+            end)
+            bw:SetScript("OnValueChanged", function(s, v)
+                v = math.floor(v + 0.5)
+                bwTxt:SetText("Bar width: " .. v)
+                db().bars = db().bars or {}; db().bars[key] = db().bars[key] or {}
+                db().bars[key].barWidth = v
+                if GBI.Bar and GBI.Bar.ApplyAllBars then GBI.Bar.ApplyAllBars() end
+            end)
+            lastSlider = bw
+        else
+            -- Icons per row
+            local pr = CreateFrame("Slider", "GBIBarPerRow_" .. key, parent, "OptionsSliderTemplate")
+            pr:SetPoint("TOPLEFT", sz, "BOTTOMLEFT", 0, -22)
+            pr:SetWidth(180); pr:SetMinMaxValues(1, 20); pr:SetValueStep(1); pr:SetObeyStepOnDrag(true)
+            _G[pr:GetName() .. "Low"]:SetText("1")
+            _G[pr:GetName() .. "High"]:SetText("20")
+            local prTxt = _G[pr:GetName() .. "Text"]
+            pr:SetScript("OnShow", function(s)
+                local sv = (db().bars or {})[key] or {}
+                local n = sv.iconsPerRow or 8
+                s:SetValue(n); prTxt:SetText("Icons per row: " .. n)
+            end)
+            pr:SetScript("OnValueChanged", function(s, v)
+                v = math.floor(v + 0.5)
+                prTxt:SetText("Icons per row: " .. v)
+                db().bars = db().bars or {}; db().bars[key] = db().bars[key] or {}
+                db().bars[key].iconsPerRow = v
+                if GBI.Bar and GBI.Bar.ApplyAllBars then GBI.Bar.ApplyAllBars() end
+            end)
+
+            -- Grow direction (cooldowns only)
+            local gdLbl = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+            gdLbl:SetPoint("LEFT", pr, "RIGHT", 32, 0)
+            gdLbl:SetText("Grow")
+            local gd = CreateFrame("DropdownButton", nil, parent, "WowStyle1DropdownTemplate")
+            gd:SetPoint("LEFT", gdLbl, "RIGHT", 6, 0); gd:SetWidth(110)
+            local function curGrow()
+                local sv = (db().bars or {})[key] or {}
+                return sv.growDir or "RIGHT"
             end
-        end)
-        gd:SetScript("OnShow", function() gd:GenerateMenu() end)
+            gd:SetupMenu(function(_, root)
+                for _, dir in ipairs({ "RIGHT", "LEFT" }) do
+                    root:CreateRadio(dir, function() return curGrow() == dir end, function()
+                        db().bars = db().bars or {}; db().bars[key] = db().bars[key] or {}
+                        db().bars[key].growDir = dir
+                        if GBI.Bar and GBI.Bar.ApplyAllBars then GBI.Bar.ApplyAllBars() end
+                        gd:GenerateMenu()
+                    end)
+                end
+            end)
+            gd:SetScript("OnShow", function() gd:GenerateMenu() end)
+            lastSlider = pr
+        end
 
-        return pr  -- caller anchors next group below this
+        return lastSlider
     end
 
-    local intControls = makeBarControls(content, barHeader, -8, "interrupts", "Interrupts window")
-    local cdControls  = makeBarControls(content, intControls, -28, "cooldowns",  "Cooldowns window")
+    local intControls = makeBarControls(content, barHeader, -8, "interrupts", "Interrupts window", true)
+    local cdControls  = makeBarControls(content, intControls, -28, "cooldowns",  "Cooldowns window", false)
 
     -- ============= 2. Interrupt alert ============= --
     local intHeader = content:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
