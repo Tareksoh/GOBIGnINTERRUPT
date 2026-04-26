@@ -34,6 +34,16 @@ local seenBig  = {}     -- spellID -> true for any K.CAT_BIGCD observed this run
 -- we observe all of them simultaneously off CD.
 local allReadyLatch = true
 
+-- Burst-window quality gates. We refuse to fire cd_ready when the supposed
+-- "burst" was trivial (one spell observed, peak overlap of 1, or fired
+-- immediately after the latch broke).
+local BURST_MIN_SET    = 3        -- effective set must have >= N entries
+local BURST_MIN_PEAK   = 2        -- at least N tracked spells must have been
+                                  -- on cooldown simultaneously during the burst
+local BURST_GUARD_S    = 30       -- latch must have been false for >= N seconds
+local burstStartAt     = nil      -- GetTime() when latch flipped false
+local burstPeakInFlight = 0       -- max overlap during current burst window
+
 local function log(level, ...) if GBI.Log then GBI.Log[level]("brain", ...) end end
 
 -- Effective burst-ready spell set, based on db.burst.mode:
@@ -125,7 +135,18 @@ function M.OnCast(unit, spellID, cdEntry)
     -- If this spell is in the all-ready list, the burst window is now broken
     if M.IsSpellInAllReadyList(spellID) and allReadyLatch then
         allReadyLatch = false
+        burstStartAt  = now
+        burstPeakInFlight = 0
         log("Debug", "all-ready latch -> false (spell %d went active)", spellID)
+    end
+
+    -- Track peak simultaneous-on-CD count across tracked spells (B).
+    if M.IsSpellInAllReadyList(spellID) then
+        local sum = 0
+        for sid in pairs(effectiveSet()) do
+            sum = sum + (inFlight[sid] or 0)
+        end
+        if sum > burstPeakInFlight then burstPeakInFlight = sum end
     end
 
     -- emit start to bar (cd_cast SoundPipeline.Fire intentionally removed)
@@ -155,10 +176,27 @@ function M.OnCast(unit, spellID, cdEntry)
         -- only re-arm + fire if this spell is in the list, and the entire
         -- list is now ready, and we previously broke the latch.
         if (not allReadyLatch) and M.IsSpellInAllReadyList(sid) and allReady() then
-            allReadyLatch = true
-            log("Info", "ALL READY (%d-spell list, last to come up: %d)",
-                #(getList() or {}), sid)
-            fireAllReady(sid)
+            local set = effectiveSet()
+            local setSize = 0
+            for _ in pairs(set) do setSize = setSize + 1 end
+            local elapsed = burstStartAt and (GetTime() - burstStartAt) or 0
+            local pass = setSize >= BURST_MIN_SET
+                     and burstPeakInFlight >= BURST_MIN_PEAK
+                     and elapsed >= BURST_GUARD_S
+            if pass then
+                allReadyLatch = true
+                log("Info", "ALL READY  set=%d peak=%d elapsed=%.1fs (last: %d)",
+                    setSize, burstPeakInFlight, elapsed, sid)
+                fireAllReady(sid)
+            else
+                allReadyLatch = true       -- still re-arm latch, just no fire
+                log("Debug", "all-ready GATE-FAIL set=%d peak=%d elapsed=%.1fs " ..
+                    "(min set=%d peak=%d guard=%ds) - skipping fire",
+                    setSize, burstPeakInFlight, elapsed,
+                    BURST_MIN_SET, BURST_MIN_PEAK, BURST_GUARD_S)
+            end
+            burstStartAt = nil
+            burstPeakInFlight = 0
         end
     end)
 end
@@ -176,6 +214,8 @@ function M.Reset()
     inFlight       = {}
     seenBig        = {}
     allReadyLatch  = true
+    burstStartAt   = nil
+    burstPeakInFlight = 0
     if GBI.Bar and GBI.Bar.Reset then GBI.Bar.Reset() end
     log("Info", "state reset")
 end
