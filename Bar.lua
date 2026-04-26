@@ -62,11 +62,7 @@ local function newBar(spec)
 
     local function saved() return GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.bars and GOBIGnINTERRUPTDB.bars[spec.key] or {} end
     local function effIcon()    return math.floor(ICON_BASE * self.scale + 0.5) end
-    local NAME_H = 14
     local function effRowH()
-        if spec.progressBar then
-            return NAME_H + 4 + effIcon() + 4   -- name | gap | bar (icon-tall)
-        end
         return effIcon() + 4
     end
     local function effPerRow()
@@ -144,14 +140,12 @@ local function newBar(spec)
 
         row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         if spec.progressBar then
-            -- Name above the bar, full row width, with a thick black outline
-            -- so class colors stay legible regardless of bar fill color.
-            row.name:SetPoint("TOPLEFT", row, "TOPLEFT", 4, 0)
-            row.name:SetPoint("RIGHT", row, "RIGHT", -4, 0)
-            row.name:SetHeight(NAME_H)
+            -- Name overlays the bar, left-aligned, with a black outline so
+            -- class colors stay legible regardless of bar fill color.
+            row.name:SetPoint("LEFT", row.progBar, "LEFT", 6, 0)
             row.name:SetJustifyH("LEFT")
             local f, sz = row.name:GetFont()
-            if f then row.name:SetFont(f, sz or 11, "OUTLINE") end
+            if f then row.name:SetFont(f, sz or 12, "OUTLINE") end
         else
             row.name:SetPoint("LEFT", row, "LEFT", 4, 0)
             row.name:SetWidth(NAME_WIDTH)
@@ -282,9 +276,7 @@ local function newBar(spec)
             if row and row.bg then
                 if locked then row.bg:Hide() else row.bg:Show() end
             end
-            if row and row.name then
-                if locked then row.name:Hide() else row.name:Show() end
-            end
+            -- name always visible, regardless of lock state
         end
         self.anchor:EnableMouse(not locked)
     end
