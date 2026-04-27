@@ -314,17 +314,13 @@ local function newBar(spec)
         local now = GetTime()
         local glowOn = glowEnabled()
         for _, units in pairs(self.icons) do
-            for i = #units, 1, -1 do
-                local entry = units[i]
+            for _, entry in ipairs(units) do
                 local expired = entry.endsAt and entry.endsAt <= now
-                if expired and spec.progressBar then
-                    -- Interrupt window: keep the icon visible and glow it
-                    -- to indicate the spell is ready and off cooldown.
+                if expired then
+                    -- KEEP the icon visible for the whole run; glow it to
+                    -- show the spell is ready. Brain.Reset (zone change)
+                    -- removes them via Bar.Reset for a fresh state.
                     if not entry.glowing then showGlow(entry.icon); entry.glowing = true end
-                elseif expired then
-                    if entry.glowing then hideGlow(entry.icon); entry.glowing = false end
-                    entry.icon:Hide()
-                    table.remove(units, i)
                 elseif glowOn and entry.endsAt and (entry.endsAt - now) <= GLOW_LEAD_S then
                     if not entry.glowing then showGlow(entry.icon); entry.glowing = true end
                 elseif entry.glowing and not glowOn then
@@ -466,12 +462,9 @@ local function newBar(spec)
         local list = self.icons[unit] or {}
         for _, e in ipairs(list) do
             if e.spellID == spellID then
-                if spec.progressBar then
-                    -- Interrupt row: keep icon, mark ready, expireIcons will glow it.
-                    e.endsAt = GetTime() - 0.01
-                else
-                    e.icon:Hide()
-                end
+                -- Mark ready; expireIcons handles the glow on next tick.
+                -- The icon stays visible for the rest of the run.
+                e.endsAt = GetTime() - 0.01
                 return
             end
         end

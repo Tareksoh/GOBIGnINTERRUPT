@@ -225,8 +225,9 @@ end
 function M.OnCDReady(unit, spellID)
     local c = containers[unit]
     if not c then return end
+    -- Keep the icon for the run; ticker will glow it once ready.
     for _, e in ipairs(c.icons) do
-        if e.spellID == spellID then e.icon:Hide(); break end
+        if e.spellID == spellID then e.endsAt = GetTime() - 0.01; break end
     end
     relayout(c)
 end
@@ -334,7 +335,18 @@ tk:SetScript("OnUpdate", function(self, elapsed)
     local now = GetTime()
     for _, c in pairs(containers) do
         for _, e in ipairs(c.icons) do
-            if e.icon:IsShown() and e.endsAt and e.endsAt <= now then e.icon:Hide() end
+            if e.icon:IsShown() and e.endsAt and e.endsAt <= now then
+                -- Keep icon visible, glow to indicate spell is ready.
+                if not e.glowing and _G.ActionButton_ShowOverlayGlow then
+                    pcall(_G.ActionButton_ShowOverlayGlow, e.icon)
+                    e.glowing = true
+                end
+            elseif e.glowing and e.endsAt and e.endsAt > now then
+                if _G.ActionButton_HideOverlayGlow then
+                    pcall(_G.ActionButton_HideOverlayGlow, e.icon)
+                end
+                e.glowing = false
+            end
         end
         relayout(c)
     end
