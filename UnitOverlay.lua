@@ -229,9 +229,7 @@ function M.PopulatePlaceholders(unit)
 
     for _, e in ipairs(GBI.SpellsForUnit(unit)) do
         local cd = e.cd
-        if cd.category ~= K.CAT_INTERRUPT
-           and cd.category ~= K.CAT_DISPEL
-           and cd.category ~= K.CAT_UTILITY then
+        if K.IsCooldownBarCategory(cd.category) then
             local exists
             for _, x in ipairs(c.icons) do
                 if x.spellID == e.sid then exists = x; break end

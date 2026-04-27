@@ -12,7 +12,6 @@
 -- Public API (back-compat with Brain.lua):
 --   GBI.Bar.OnCDStart(unit, spellID, state)   - dispatched by category
 --   GBI.Bar.OnCDReady(unit, spellID, state)
---   GBI.Bar.OnAllReady()
 --   GBI.Bar.Reset()
 --   GBI.Bar.Show() / Hide() / SetEnabled(bool)
 --   GBI.Bar.GetInterruptAnchor()  - for KickCounter to attach its label
@@ -417,9 +416,7 @@ local function newBar(spec)
         for _, e in ipairs(GBI.SpellsForUnit(unit)) do
             local cd = e.cd
             local include = (spec.progressBar and cd.category == K.CAT_INTERRUPT)
-                         or (not spec.progressBar and cd.category ~= K.CAT_INTERRUPT
-                                                  and cd.category ~= K.CAT_DISPEL
-                                                  and cd.category ~= K.CAT_UTILITY)
+                         or (not spec.progressBar and K.IsCooldownBarCategory(cd.category))
             if include then
                 local exists
                 for _, x in ipairs(list) do
@@ -486,6 +483,14 @@ local function newBar(spec)
     end
     function self.Hide()
         if self.anchor then self.anchor:Hide() end
+        -- Clear any active overlay glows so we don't leak ActionButton
+        -- glow textures on the underlying frames when the engine flips
+        -- back on later.
+        for _, units in pairs(self.icons) do
+            for _, entry in ipairs(units) do
+                if entry.glowing then hideGlow(entry.icon); entry.glowing = false end
+            end
+        end
     end
     function self.Reset()
         if not self.anchor then return end
@@ -666,9 +671,6 @@ end
 function M.OnCDStart(unit, spellID, state) dispatch(state, "OnCDStart", unit, spellID) end
 function M.OnCDReady(unit, spellID, state) dispatch(state, "OnCDReady", unit, spellID) end
 
-function M.OnAllReady()
-    -- visual ping on the cooldown bar/overlay (subtle flash). Phase 2: TBD.
-end
 
 function M.Reset()
     barInt.Reset(); barCD.Reset()

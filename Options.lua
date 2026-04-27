@@ -659,6 +659,7 @@ local function buildPanel()
     local function rebuildList()
         for _, r in ipairs(listRows) do r:Hide() end
         listRows = {}
+        if not (GBI.IterCooldowns or GBI.Cooldowns) then return end
         local entries = (GBI.IterCooldowns and GBI.IterCooldowns(true)) or GBI.Cooldowns or {}
         local matches = {}
         for sid, cd in pairs(entries) do

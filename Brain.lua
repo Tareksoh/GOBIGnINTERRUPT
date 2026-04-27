@@ -109,7 +109,6 @@ local function fireAllReady(triggerSpell)
         GBI.SoundPipeline.Fire(K.SOUND_CAT_CD_READY,
             { reason = "all-ready", spellID = triggerSpell })
     end
-    if GBI.Bar and GBI.Bar.OnAllReady then GBI.Bar.OnAllReady() end
 end
 
 function M.OnCast(unit, spellID, cdEntry)

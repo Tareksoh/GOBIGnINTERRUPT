@@ -29,6 +29,15 @@ K.ALL_CATEGORIES = {
     K.CAT_OFFENSIVE, K.CAT_DISPEL, K.CAT_UTILITY,
 }
 
+-- Membership helper: is this category eligible for the cooldown bar /
+-- unit overlay (i.e., big CD or defensive)? Excludes interrupt (handled
+-- by its own bar), dispel, and utility.
+function K.IsCooldownBarCategory(cat)
+    return cat == K.CAT_BIGCD
+        or cat == K.CAT_OFFENSIVE
+        or cat == K.CAT_DEFENSIVE
+end
+
 -- Sound trigger categories (match Sounds.lua tagging) ---------------------
 
 K.SOUND_CAT_INTERRUPT_ALERT = "interrupts"
