@@ -114,20 +114,32 @@ local function newBar(spec)
                 local barW = self:GetWidth()
                 local growLeft = effGrowDir() == "LEFT"
                 for _, e in ipairs(self.iconList or {}) do
-                    if e.icon:IsShown() and e.endsAt then
-                        if not soonestEnd or e.endsAt < soonestEnd then
-                            soonestStart = e.startedAt or now
-                            soonestEnd   = e.endsAt
-                        end
-                        local total = math.max(0.1, e.endsAt - (e.startedAt or now))
-                        local rem = math.max(0, e.endsAt - now)
-                        local frac = rem / total
-                        e.icon:ClearAllPoints()
-                        if growLeft then
-                            -- Icon starts at left edge, slides right toward bar's right end as fill empties.
-                            e.icon:SetPoint("CENTER", self, "RIGHT", -frac * barW, 0)
+                    if e.icon:IsShown() then
+                        if e.endsAt and e.endsAt > now then
+                            -- Live: ride the fill edge.
+                            if not soonestEnd or e.endsAt < soonestEnd then
+                                soonestStart = e.startedAt or now
+                                soonestEnd   = e.endsAt
+                            end
+                            local total = math.max(0.1, e.endsAt - (e.startedAt or now))
+                            local rem = math.max(0, e.endsAt - now)
+                            local frac = rem / total
+                            e.icon:ClearAllPoints()
+                            if growLeft then
+                                e.icon:SetPoint("CENTER", self, "RIGHT", -frac * barW, 0)
+                            else
+                                e.icon:SetPoint("CENTER", self, "LEFT",  frac * barW, 0)
+                            end
                         else
-                            e.icon:SetPoint("CENTER", self, "LEFT",  frac * barW, 0)
+                            -- Placeholder or ready: park at the "ready" end
+                            -- of the bar (frac=0 position — where a live icon
+                            -- ends up when its CD finishes).
+                            e.icon:ClearAllPoints()
+                            if growLeft then
+                                e.icon:SetPoint("CENTER", self, "RIGHT", 0, 0)
+                            else
+                                e.icon:SetPoint("CENTER", self, "LEFT",  0, 0)
+                            end
                         end
                     end
                 end
@@ -404,10 +416,15 @@ local function newBar(spec)
         for _, units in pairs(self.icons) do
             for _, entry in ipairs(units) do
                 local expired = entry.endsAt and entry.endsAt <= now
-                if expired then
-                    -- KEEP the icon visible for the whole run; glow it to
-                    -- show the spell is ready. Brain.Reset (zone change)
-                    -- removes them via Bar.Reset for a fresh state.
+                if expired and spec.progressBar then
+                    -- Interrupts bar: when CD ends, dim/desaturate the icon
+                    -- (matches the "not yet observed" placeholder look).
+                    -- When the next cast lands, OnCDStart un-dims it.
+                    if entry.glowing then hideGlow(entry.icon); entry.glowing = false end
+                    entry.icon:SetAlpha(0.4)
+                    if entry.icon.tex then entry.icon.tex:SetDesaturated(true) end
+                elseif expired then
+                    -- Cooldown bar: glow when ready (existing behaviour).
                     if not entry.glowing then showGlow(entry.icon); entry.glowing = true end
                 elseif glowOn and entry.endsAt and (entry.endsAt - now) <= GLOW_LEAD_S then
                     if not entry.glowing then showGlow(entry.icon); entry.glowing = true end
