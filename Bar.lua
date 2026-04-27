@@ -588,6 +588,20 @@ local function newBar(spec)
         local iconPath = info and info.iconID or "Interface\\Icons\\INV_Misc_QuestionMark"
         entry.icon.tex:SetTexture(iconPath)
         entry.cooldown:SetCooldown(state.startedAt, state.endsAt - state.startedAt)
+        -- Charge count overlay (top-right). Created lazily; shown only when
+        -- the entry has a meaningful charge count (max > 1).
+        local ch    = state.charges
+        local chMax = state.chargesMax
+        if ch and chMax and chMax > 1 then
+            if not entry.chargeText then
+                entry.chargeText = entry.icon:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+                entry.chargeText:SetPoint("BOTTOMRIGHT", entry.icon, "BOTTOMRIGHT", -1, 1)
+            end
+            entry.chargeText:SetText(tostring(ch))
+            entry.chargeText:Show()
+        elseif entry.chargeText then
+            entry.chargeText:Hide()
+        end
         entry.icon:Show()
         if entry.placeholder then
             entry.placeholder = false

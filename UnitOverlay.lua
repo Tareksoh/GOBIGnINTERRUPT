@@ -283,6 +283,19 @@ function M.OnCDStart(unit, spellID, state)
         entry.icon.tex:SetDesaturated(false)
     end
     entry.cooldown:SetCooldown(state.startedAt, state.endsAt - state.startedAt)
+    -- Charge count overlay (top-right corner of the icon).
+    local ch    = state.charges
+    local chMax = state.chargesMax
+    if ch and chMax and chMax > 1 then
+        if not entry.chargeText then
+            entry.chargeText = entry.icon:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+            entry.chargeText:SetPoint("BOTTOMRIGHT", entry.icon, "BOTTOMRIGHT", -1, 1)
+        end
+        entry.chargeText:SetText(tostring(ch))
+        entry.chargeText:Show()
+    elseif entry.chargeText then
+        entry.chargeText:Hide()
+    end
     entry.icon:Show()
     relayout(c)
 end

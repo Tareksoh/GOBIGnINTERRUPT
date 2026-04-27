@@ -7,7 +7,11 @@
 -- the addon channel; receivers feed them into Brain as if locally observed.
 --
 -- Wire format (semicolon-delimited):
---   U;<spellID>;<duration>           - cast announcement
+--   U;<spellID>;<duration>[;<charges>;<chargesMax>]   - cast announcement
+--   S;<specID>                                         - spec announcement
+--   I                                                  - "I just landed an interrupt"
+--   T;<nodeID,nodeID,...>                              - talent node IDs (future)
+-- Receivers tolerate missing trailing fields (back-compat).
 -- Channel: RAID if in raid, else PARTY. Both ends must have the addon.
 -- Default: enabled (DB.comm.enabled = true).
 
@@ -40,31 +44,60 @@ local function senderToUnit(sender)
     return nil
 end
 
-function M.Broadcast(spellID, duration)
-    if not enabled() then
-        log("Debug", "broadcast skip: comm disabled (spell=%s)", tostring(spellID)); return
-    end
-    if not IsInGroup() then
-        log("Debug", "broadcast skip: not in group (spell=%s)", tostring(spellID)); return
-    end
-    if type(spellID) ~= "number" or type(duration) ~= "number" then
-        log("Debug", "broadcast skip: bad args (spell=%s dur=%s)",
-            tostring(spellID), tostring(duration)); return
-    end
+local function send(msg)
+    if not enabled() or not IsInGroup() then return end
+    -- Defensive: never broadcast a value that's secret-tagged.
+    if GBI.Taint and GBI.Taint.IsSecret and GBI.Taint.IsSecret(msg) then return end
     local channel = IsInRaid() and "RAID" or "PARTY"
-    local ok, err = C_ChatInfo.SendAddonMessage(PREFIX, ("U;%d;%d"):format(spellID, duration), channel)
-    log("Debug", "broadcast U;%d;%d -> %s (ok=%s err=%s)",
-        spellID, duration, channel, tostring(ok), tostring(err))
+    return C_ChatInfo.SendAddonMessage(PREFIX, msg, channel)
+end
+
+function M.Broadcast(spellID, duration, charges, chargesMax)
+    if type(spellID) ~= "number" or type(duration) ~= "number" then return end
+    local msg
+    if type(charges) == "number" and type(chargesMax) == "number" then
+        msg = ("U;%d;%d;%d;%d"):format(spellID, duration, charges, chargesMax)
+    else
+        msg = ("U;%d;%d"):format(spellID, duration)
+    end
+    log("Debug", "send %s", msg)
+    return send(msg)
+end
+
+function M.BroadcastSpec(specID)
+    if type(specID) ~= "number" then return end
+    log("Debug", "send S;%d", specID)
+    return send(("S;%d"):format(specID))
+end
+
+function M.BroadcastInterrupt()
+    log("Debug", "send I")
+    return send("I")
 end
 
 local f = CreateFrame("Frame", "GOBIGnINTERRUPT_CommFrame")
 f:RegisterEvent("PLAYER_LOGIN")
+f:RegisterEvent("PLAYER_ENTERING_WORLD")
+f:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+f:RegisterEvent("GROUP_ROSTER_UPDATE")
 f:RegisterEvent("CHAT_MSG_ADDON")
+
+local function announceSpec()
+    local s = GetSpecialization and GetSpecialization()
+    if type(s) == "number" and s > 0 then M.BroadcastSpec(s) end
+end
 f:SetScript("OnEvent", function(_, event, prefix, msg, channel, sender)
     if event == "PLAYER_LOGIN" then
         if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
             C_ChatInfo.RegisterAddonMessagePrefix(PREFIX)
         end
+        return
+    end
+    if event == "PLAYER_ENTERING_WORLD"
+       or event == "PLAYER_SPECIALIZATION_CHANGED"
+       or event == "GROUP_ROSTER_UPDATE" then
+        -- Re-announce on these so late joiners learn our spec.
+        C_Timer.After(1.5, announceSpec)
         return
     end
     if event ~= "CHAT_MSG_ADDON" or prefix ~= PREFIX then return end
@@ -77,25 +110,54 @@ f:SetScript("OnEvent", function(_, event, prefix, msg, channel, sender)
         return
     end
 
-    local mt, sidStr, durStr = strsplit(";", msg or "")
-    if mt ~= "U" then log("Debug", "  drop: bad msgType=%s", tostring(mt)); return end
-    local sid = tonumber(sidStr); local dur = tonumber(durStr)
-    if not sid or not dur then
-        log("Debug", "  drop: bad parse sid=%s dur=%s", tostring(sidStr), tostring(durStr)); return
-    end
-
+    local parts = { strsplit(";", msg or "") }
+    local mt = parts[1]
     local unit = senderToUnit(sender)
     if not unit then
         log("Debug", "  drop: senderToUnit nil for %s", tostring(sender)); return
     end
 
-    local cd = GBI.GetCooldown and GBI.GetCooldown(sid)
-    if not cd then
-        log("Debug", "  drop: spell %d not in receiver's DB", sid); return
-    end
-
-    log("Debug", "recv U %s -> %s spell=%d dur=%d", sender, unit, sid, dur)
-    if GBI.Brain and GBI.Brain.OnCast then
-        GBI.Brain.OnCast(unit, sid, cd)
+    if mt == "U" then
+        local sid = tonumber(parts[2]); local dur = tonumber(parts[3])
+        local ch  = tonumber(parts[4]); local chMax = tonumber(parts[5])
+        if not sid or not dur then return end
+        local cd = GBI.GetCooldown and GBI.GetCooldown(sid)
+        if not cd then return end
+        log("Debug", "recv U %s -> %s spell=%d dur=%d ch=%s/%s",
+            sender, unit, sid, dur, tostring(ch), tostring(chMax))
+        if GBI.Brain and GBI.Brain.OnCast then
+            local cdCopy = cd
+            if ch and chMax then
+                cdCopy = { name = cd.name, duration = cd.duration, class = cd.class,
+                    category = cd.category, charges = ch, chargesMax = chMax }
+            end
+            GBI.Brain.OnCast(unit, sid, cdCopy)
+        end
+    elseif mt == "S" then
+        local specID = tonumber(parts[2])
+        if not specID then return end
+        log("Debug", "recv S %s -> %s spec=%d", sender, unit, specID)
+        if GBI.Inspect and GBI.Inspect.SetSpecForUnit then
+            GBI.Inspect.SetSpecForUnit(unit, specID)
+        end
+    elseif mt == "I" then
+        log("Debug", "recv I %s -> %s (interrupt)", sender, unit)
+        if GBI.KickCounter and GBI.KickCounter.AttributePeer then
+            GBI.KickCounter.AttributePeer(unit)
+        end
+    elseif mt == "T" then
+        local idsStr = parts[2] or ""
+        local set = {}
+        for idStr in idsStr:gmatch("[^,]+") do
+            local n = tonumber(idStr)
+            if n then set[n] = true end
+        end
+        log("Debug", "recv T %s -> %s (%d nodes)", sender, unit, (function()
+            local c = 0; for _ in pairs(set) do c = c + 1 end; return c end)())
+        if GBI.TalentSync and GBI.TalentSync.SetTalents then
+            GBI.TalentSync.SetTalents(unit, set)
+        end
+    else
+        log("Debug", "  drop: unknown msgType=%s", tostring(mt))
     end
 end)

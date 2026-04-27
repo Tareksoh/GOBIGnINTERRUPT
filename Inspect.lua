@@ -78,6 +78,22 @@ function M.GetClassByGUID(guid)
     return rec and rec.classToken or nil
 end
 
+-- Inject a spec for a unit from a peer-comm spec announcement. Replaces the
+-- inspect path entirely for units running the addon — more reliable than
+-- NotifyInspect, instant on roster changes.
+function M.SetSpecForUnit(unit, specID)
+    if type(specID) ~= "number" or specID <= 0 then return end
+    local guid = unitGUIDSafe(unit)
+    if not guid then return end
+    cache[guid] = cache[guid] or {}
+    cache[guid].spec = specID
+    if not cache[guid].classToken then
+        local _, classToken = UnitClass(unit)
+        cache[guid].classToken = classToken
+        cache[guid].name = UnitName(unit)
+    end
+end
+
 -- Queue management -------------------------------------------------------
 
 local function isQueued(unit)

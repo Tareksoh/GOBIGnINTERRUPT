@@ -34,6 +34,7 @@ KickCounter.lua
 MinimapIcon.lua
 SoundPipeline.lua
 CDComm.lua
+TalentSync.lua
 
 # Entry
 GOBIGnINTERRUPT.lua

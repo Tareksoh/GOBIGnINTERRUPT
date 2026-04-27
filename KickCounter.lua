@@ -133,6 +133,24 @@ local function recordRecentCast(unit)
     end
 end
 
+local function creditUnit(unit, reason)
+    local name = UnitName(unit)
+    if not name then return end
+    counts[name] = (counts[name] or 0) + 1
+    log("Debug", "kick++ %s (%s) total=%d", name, reason, counts[name])
+    refresh()
+end
+
+-- Peer-broadcast attribution: the player on the other end announces
+-- "I just landed an interrupt" via CDComm. Direct attribution beats
+-- the temporal-window guess; consumes any pending Kicker-style record.
+local recentPeerAttribAt = {}     -- [unit] = time (suppresses temporal fallback)
+function M.AttributePeer(unit)
+    creditUnit(unit, "peer-broadcast")
+    recentPeerAttribAt[unit] = GetTime()
+    recentPartyCasts[unit] = nil
+end
+
 local function attributeInterrupt()
     local now = GetTime()
     local bestUnit, bestTime = nil, -1
@@ -142,12 +160,20 @@ local function attributeInterrupt()
         end
     end
     if not bestUnit then return end
-    local name = UnitName(bestUnit)
-    if not name then return end
-    counts[name] = (counts[name] or 0) + 1
-    log("Debug", "kick++ %s (attributed via %s) total=%d", name, bestUnit, counts[name])
-    refresh()
+    -- If a peer already self-attributed within ~0.5s, don't double-credit.
+    local peerAt = recentPeerAttribAt[bestUnit]
+    if peerAt and (now - peerAt) < KICK_ATTRIB_WINDOW then
+        recentPartyCasts[bestUnit] = nil
+        return
+    end
+    creditUnit(bestUnit, "temporal-attrib via " .. bestUnit)
     recentPartyCasts[bestUnit] = nil
+    -- If the attribution lands on us, tell peers — they'll credit us
+    -- directly instead of running their own temporal heuristic, which
+    -- can mis-attribute on chained kicks.
+    if bestUnit == "player" and GBI.CDComm and GBI.CDComm.BroadcastInterrupt then
+        GBI.CDComm.BroadcastInterrupt()
+    end
 end
 
 f:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)

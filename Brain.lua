@@ -121,12 +121,23 @@ function M.OnCast(unit, spellID, cdEntry)
     if last and (now - last) < DEDUP then return end
     recent[unit][spellID] = now
 
+    -- Per-unit talent CDR: each peer broadcasts their active talent node IDs
+    -- via TalentSync; AdjustCD shrinks the duration for spells with reductions.
+    -- Falls back to the base duration when no talent data is known.
+    local baseDur = cdEntry.duration or 30
+    local effDur  = baseDur
+    if GBI.TalentSync and GBI.TalentSync.AdjustCD then
+        effDur = GBI.TalentSync.AdjustCD(unit, spellID, baseDur) or baseDur
+    end
+
     -- record CD state
     state[unit] = state[unit] or {}
     state[unit][spellID] = {
-        startedAt = now,
-        endsAt    = now + (cdEntry.duration or 30),
-        cdEntry   = cdEntry,
+        startedAt  = now,
+        endsAt     = now + effDur,
+        cdEntry    = cdEntry,
+        charges    = cdEntry.charges,       -- nil for non-charged spells
+        chargesMax = cdEntry.chargesMax,
     }
 
     -- bump in-flight counter for this spell
@@ -163,13 +174,26 @@ function M.OnCast(unit, spellID, cdEntry)
     end
 
     -- Peer-share: broadcast our own casts so other PCs (where party
-    -- UNIT_SPELLCAST is redacted) can show our CDs anyway.
+    -- UNIT_SPELLCAST is redacted) can show our CDs anyway. Include
+    -- live charge counts when the spell uses charges.
     if unit == "player" and GBI.CDComm and GBI.CDComm.Broadcast then
-        GBI.CDComm.Broadcast(spellID, cdEntry.duration or 30)
+        local ch, chMax
+        if C_Spell and C_Spell.GetSpellCharges then
+            local ok, info = pcall(C_Spell.GetSpellCharges, spellID)
+            if ok and type(info) == "table" then
+                ch    = info.currentCharges
+                chMax = info.maxCharges
+                if ch and chMax and chMax > 1 then
+                    state[unit][spellID].charges    = ch
+                    state[unit][spellID].chargesMax = chMax
+                end
+            end
+        end
+        GBI.CDComm.Broadcast(spellID, cdEntry.duration or 30, ch, chMax)
     end
 
     -- schedule the end-of-cooldown event
-    local duration = cdEntry.duration or 30
+    local duration = effDur
     local sid      = spellID
     local u        = unit
     local endsAt   = state[unit][spellID].endsAt
