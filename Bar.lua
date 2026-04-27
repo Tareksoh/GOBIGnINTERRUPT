@@ -417,12 +417,11 @@ local function newBar(spec)
             for _, entry in ipairs(units) do
                 local expired = entry.endsAt and entry.endsAt <= now
                 if expired and spec.progressBar then
-                    -- Interrupts bar: when CD ends, dim/desaturate the icon
-                    -- (matches the "not yet observed" placeholder look).
-                    -- When the next cast lands, OnCDStart un-dims it.
+                    -- Interrupts bar: once observed, icon stays bright (no
+                    -- glow, no dim — just a clean ready-state icon parked
+                    -- at the bar's frac=0 end). Dim placeholder look is
+                    -- only for spells that have NEVER been observed yet.
                     if entry.glowing then hideGlow(entry.icon); entry.glowing = false end
-                    entry.icon:SetAlpha(0.4)
-                    if entry.icon.tex then entry.icon.tex:SetDesaturated(true) end
                 elseif expired then
                     -- Cooldown bar: glow when ready (existing behaviour).
                     if not entry.glowing then showGlow(entry.icon); entry.glowing = true end
