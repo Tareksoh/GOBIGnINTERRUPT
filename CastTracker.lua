@@ -50,16 +50,16 @@ f:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
     -- embeds the real spell ID at segment 6.
     -- castGUID format: Cast-<type>-<server>-<inst>-<zoneUID>-<spellID>-<counter>
     local spellID = GBI.Taint.SafeSpellID(rawSpellID)
-    if (not spellID) or (not GBI.GetCooldown(spellID)) then
+    if not spellID then
+        -- raw arg3 was unusable (secret-tagged or otherwise); recover the
+        -- spellID from the castGUID's segment 6. castGUID itself may be
+        -- secret-tagged so the match is pcall'd.
         local castGUID = arg2
         if type(castGUID) == "string" then
-            -- castGUID itself may be secret-tagged on remote-PC party members;
-            -- wrap the index call (`:match`) in pcall so we don't take taint
-            -- from the throw, and fall back to no recovery.
             local ok, m = pcall(string.match, castGUID,
                 "^Cast%-%d+%-%d+%-%d+%-%d+%-(%d+)%-")
             local fromGUID = ok and tonumber(m) or nil
-            if fromGUID and GBI.GetCooldown(fromGUID) then
+            if fromGUID then
                 log("Debug", "  recovered spell %d from castGUID (arg3 was %s)",
                     fromGUID, tostring(rawSpellID))
                 spellID = fromGUID
