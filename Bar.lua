@@ -166,12 +166,30 @@ local function newBar(spec)
         return row
     end
 
+    -- For the interrupts window: returns true if the unit's class+spec has
+    -- an interrupt spell tracked in GBI.Interrupts. Permissive on unknown spec.
+    local function unitHasInterrupt(unit)
+        local _, classToken = UnitClass(unit)
+        if not classToken then return true end
+        local entry = GBI.Interrupts and GBI.Interrupts[classToken]
+        if not entry then return false end           -- class has no interrupt at all
+        if entry.default then return true end         -- whole class qualifies
+        -- per-spec: need to know spec. Permissive on unknown.
+        local guid = GBI.Taint and GBI.Taint.SafeGUID and GBI.Taint.SafeGUID(unit)
+        local spec = guid and GBI.Inspect and GBI.Inspect.GetSpecByGUID
+            and GBI.Inspect.GetSpecByGUID(guid) or nil
+        if not spec then return true end              -- unknown spec → show
+        return entry[spec] ~= nil
+    end
+
     local function refreshNames()
         local visibleIdx = 0
         for _, unit in ipairs(K.PARTY_UNITS) do
             local row = self.rows[unit]
             if row then
-                if UnitExists(unit) then
+                local skipNoInterrupt = spec.progressBar and UnitExists(unit)
+                    and not unitHasInterrupt(unit)
+                if UnitExists(unit) and not skipNoInterrupt then
                     local name = UnitName(unit) or unit
                     local _, classToken = UnitClass(unit)
                     if classToken and RAID_CLASS_COLORS and RAID_CLASS_COLORS[classToken] then
@@ -597,6 +615,8 @@ end
 local rf = CreateFrame("Frame", "GOBIGnINTERRUPT_BarRosterFrame")
 rf:RegisterEvent("GROUP_ROSTER_UPDATE")
 rf:RegisterEvent("UNIT_NAME_UPDATE")
+rf:RegisterEvent("INSPECT_READY")
+rf:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
 rf:SetScript("OnEvent", function()
     if barInt.anchor then barInt.refreshNames() end
     if barCD.anchor  then barCD.refreshNames()  end
