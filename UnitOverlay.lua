@@ -66,7 +66,7 @@ function M.Refresh()
     local sz = ICON_SIZE()
     for _, c in pairs(containers) do
         if c.container and c.host then
-            c.container:SetSize(MAX_ICONS * (sz + ICON_GAP()), sz)
+            c.container:SetSize((MAX_ICONS * sz + (MAX_ICONS - 1) * ICON_GAP()), sz)
             for _, e in ipairs(c.icons) do e.icon:SetSize(sz, sz) end
             for _, e in ipairs(c.testIcons or {}) do e.icon:SetSize(sz, sz) end
             M.ApplyAnchor(c.container, c.host)
@@ -135,7 +135,7 @@ local function ensureContainer(unit)
     if c and c.container then c.container:Hide(); c.container:SetParent(nil) end
 
     local container = CreateFrame("Frame", nil, host)
-    container:SetSize(MAX_ICONS * (ICON_SIZE() + ICON_GAP()), ICON_SIZE())
+    container:SetSize((MAX_ICONS * ICON_SIZE() + (MAX_ICONS - 1) * ICON_GAP()), ICON_SIZE())
     container:SetFrameStrata("HIGH")
     container:Show()
     M.ApplyAnchor(container, host)
