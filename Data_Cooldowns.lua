@@ -76,7 +76,6 @@ GBI.Cooldowns = {
 [1217605]= { name = "Void Metamorphosis", duration = 120, class = "DEMONHUNTER",category = K.CAT_BIGCD, spec = {3},
               stackingResource = { auraID = 1225789, threshold = 50 }  -- charging aura on player; ready at 50
             },
-[1256301]= { name = "Voidfall",            duration = 30,  class = "DEMONHUNTER",category = K.CAT_BIGCD, spec = {3} },  -- Devourer DH; placeholder duration
 [370965] = { name = "The Hunt",            duration = 90, class = "DEMONHUNTER", category = K.CAT_BIGCD },
 [375087] = { name = "Dragonrage",          duration = 120, class = "EVOKER",     category = K.CAT_BIGCD, spec = {1} },
 [359073] = { name = "Eternity Surge",      duration = 30, class = "EVOKER",      category = K.CAT_BIGCD, spec = {1} },
