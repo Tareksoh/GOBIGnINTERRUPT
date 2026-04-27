@@ -605,7 +605,23 @@ local function buildPanel()
         "DEATHKNIGHT", "DEMONHUNTER", "DRUID", "EVOKER", "HUNTER", "MAGE",
         "MONK", "PALADIN", "PRIEST", "ROGUE", "SHAMAN", "WARLOCK", "WARRIOR",
     }
+    local SPEC_NAMES = {
+        DEATHKNIGHT = { "Blood", "Frost", "Unholy" },
+        DEMONHUNTER = { "Havoc", "Vengeance" },
+        DRUID       = { "Balance", "Feral", "Guardian", "Restoration" },
+        EVOKER      = { "Devastation", "Preservation", "Augmentation" },
+        HUNTER      = { "Beast Mastery", "Marksmanship", "Survival" },
+        MAGE        = { "Arcane", "Fire", "Frost" },
+        MONK        = { "Brewmaster", "Windwalker", "Mistweaver" },
+        PALADIN     = { "Holy", "Protection", "Retribution" },
+        PRIEST      = { "Discipline", "Holy", "Shadow" },
+        ROGUE       = { "Assassination", "Outlaw", "Subtlety" },
+        SHAMAN      = { "Elemental", "Enhancement", "Restoration" },
+        WARLOCK     = { "Affliction", "Demonology", "Destruction" },
+        WARRIOR     = { "Arms", "Fury", "Protection" },
+    }
     local currentClass = CLASS_LIST[1]
+    local currentSpec  = nil   -- nil = all specs
 
     local listScroll = CreateFrame("ScrollFrame", nil, content, "UIPanelScrollFrameTemplate")
     listScroll:SetPoint("TOPLEFT", classDD, "BOTTOMLEFT", 0, -8)
@@ -622,7 +638,20 @@ local function buildPanel()
         local matches = {}
         for sid, cd in pairs(entries) do
             if cd and cd.class == currentClass then
-                matches[#matches + 1] = { sid = sid, cd = cd }
+                local specOK = true
+                if currentSpec then
+                    if not cd.spec then
+                        specOK = true        -- all-spec spell shows under any spec filter
+                    else
+                        specOK = false
+                        for _, s in ipairs(cd.spec) do
+                            if s == currentSpec then specOK = true; break end
+                        end
+                    end
+                end
+                if specOK then
+                    matches[#matches + 1] = { sid = sid, cd = cd }
+                end
             end
         end
         table.sort(matches, function(a, b) return (a.cd.name or "") < (b.cd.name or "") end)
@@ -660,16 +689,33 @@ local function buildPanel()
         listContent:SetHeight(math.max(y, 1))
     end
 
+    local specDD = CreateFrame("DropdownButton", nil, content, "WowStyle1DropdownTemplate")
+    specDD:SetPoint("LEFT", classDD, "RIGHT", 8, 0); specDD:SetWidth(160)
+
     classDD:SetupMenu(function(_, root)
         for _, c in ipairs(CLASS_LIST) do
             root:CreateRadio(c, function() return currentClass == c end, function()
                 currentClass = c
+                currentSpec = nil
+                specDD:GenerateMenu()
                 rebuildList()
                 classDD:GenerateMenu()
             end)
         end
     end)
     classDD:SetScript("OnShow", function() classDD:GenerateMenu(); rebuildList() end)
+
+    specDD:SetupMenu(function(_, root)
+        root:CreateRadio("All specs", function() return currentSpec == nil end, function()
+            currentSpec = nil; rebuildList(); specDD:GenerateMenu()
+        end)
+        for i, name in ipairs(SPEC_NAMES[currentClass] or {}) do
+            root:CreateRadio(name, function() return currentSpec == i end, function()
+                currentSpec = i; rebuildList(); specDD:GenerateMenu()
+            end)
+        end
+    end)
+    specDD:SetScript("OnShow", function() specDD:GenerateMenu() end)
 
     -- Add custom spell row
     local addLabel = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
