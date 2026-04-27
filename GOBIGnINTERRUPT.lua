@@ -33,6 +33,7 @@ local DEFAULTS = {
     spellDb         = { disabled = {}, custom = {} },  -- user overrides
     comm            = { enabled = true },              -- peer CD-sharing broadcast
     placeholders    = { enabled = true },               -- spec-aware placeholder pre-population
+    show            = { interruptBar = true, cooldownBar = true },  -- per-window UI toggles
 }
 
 local SCHEMA_VERSION = 4

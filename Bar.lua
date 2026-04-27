@@ -697,13 +697,22 @@ function M.Reset()
     if GBI.KickCounter and GBI.KickCounter.Reset then GBI.KickCounter.Reset() end
 end
 
+local function showCfg()
+    return (GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.show) or {}
+end
+
 function M.Show()
-    barInt.Show()
-    if unitOverlayActive() then
+    local s = showCfg()
+    if s.interruptBar ~= false then barInt.Show() else barInt.Hide() end
+    if s.cooldownBar ~= false and not unitOverlayActive() then
+        barCD.Show()
+        if GBI.UnitOverlay and GBI.UnitOverlay.Hide then GBI.UnitOverlay.Hide() end
+    elseif unitOverlayActive() then
         barCD.Hide()
         if GBI.UnitOverlay and GBI.UnitOverlay.Show then GBI.UnitOverlay.Show() end
     else
-        barCD.Show()
+        -- cooldownBar disabled and overlay off: hide both
+        barCD.Hide()
         if GBI.UnitOverlay and GBI.UnitOverlay.Hide then GBI.UnitOverlay.Hide() end
     end
 end
@@ -751,15 +760,7 @@ end
 
 -- Re-evaluate cooldown-window vs unit-overlay when the option flips.
 function M.RefreshLayout()
-    if barInt.anchor and barInt.anchor:IsShown() then
-        if unitOverlayActive() then
-            barCD.Hide()
-            if GBI.UnitOverlay and GBI.UnitOverlay.Show then GBI.UnitOverlay.Show() end
-        else
-            barCD.Show()
-            if GBI.UnitOverlay and GBI.UnitOverlay.Hide then GBI.UnitOverlay.Hide() end
-        end
-    end
+    M.Show()    -- single source of truth for show/hide decisions
 end
 
 local rf = CreateFrame("Frame", "GOBIGnINTERRUPT_BarRosterFrame")

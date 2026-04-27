@@ -263,8 +263,26 @@ local function buildPanel()
     local lockTgl     = mkToggle(debugTgl,  -2, "locked",     "Lock anchor (cannot drag)")
     local showAlways  = mkToggle(lockTgl,   -2, "showAlways", "Show outside dungeons too")
 
+    local function mkShowToggle(parentRel, dy, key, labelText)
+        local cb = CreateFrame("CheckButton", nil, content, "UICheckButtonTemplate")
+        cb:SetPoint("TOPLEFT", parentRel, "BOTTOMLEFT", 0, dy)
+        cbLabel(cb):SetText(labelText)
+        cb:SetScript("OnShow", function(s)
+            local sh = db().show or {}
+            s:SetChecked(sh[key] ~= false)
+        end)
+        cb:SetScript("OnClick", function(s)
+            db().show = db().show or {}
+            db().show[key] = s:GetChecked() and true or false
+            if GBI.Bar and GBI.Bar.RefreshLayout then GBI.Bar.RefreshLayout() end
+        end)
+        return cb
+    end
+    local showInt = mkShowToggle(showAlways, -2, "interruptBar", "Show Interrupts bar")
+    local showCD  = mkShowToggle(showInt,    -2, "cooldownBar",  "Show Cooldowns bar / overlay")
+
     local glowTgl = CreateFrame("CheckButton", nil, content, "UICheckButtonTemplate")
-    glowTgl:SetPoint("TOPLEFT", showAlways, "BOTTOMLEFT", 0, -2)
+    glowTgl:SetPoint("TOPLEFT", showCD, "BOTTOMLEFT", 0, -2)
     cbLabel(glowTgl):SetText("Glow icons in last 2s before ready")
     glowTgl:SetScript("OnShow", function(s) s:SetChecked(db().glow and true or false) end)
     glowTgl:SetScript("OnClick", function(s) db().glow = s:GetChecked() and true or false end)
