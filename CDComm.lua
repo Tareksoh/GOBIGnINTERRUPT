@@ -20,8 +20,10 @@ local PREFIX = "GBINT"
 local function log(level, ...) if GBI.Log then GBI.Log[level]("comm", ...) end end
 
 local function enabled()
-    return GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.comm
-        and GOBIGnINTERRUPTDB.comm.enabled
+    -- Default ON: only disabled if user explicitly set comm.enabled = false.
+    local c = GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.comm
+    if c and c.enabled == false then return false end
+    return true
 end
 
 -- Match "Name-Realm" or "Name" against a party unit token.
