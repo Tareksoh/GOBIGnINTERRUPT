@@ -151,7 +151,9 @@ f:SetScript("OnEvent", function(_, event, prefix, msg, channel, sender)
                 cdCopy = { name = cd.name, duration = cd.duration, class = cd.class,
                     category = cd.category, charges = ch, chargesMax = chMax }
             end
-            GBI.Brain.OnCast(unit, sid, cdCopy)
+            -- Pass `dur` as overrideDuration so receiver uses sender's
+            -- already-talented CD instead of re-applying TalentSync.
+            GBI.Brain.OnCast(unit, sid, cdCopy, dur)
         end
     elseif mt == "S" then
         local specID = tonumber(parts[2])

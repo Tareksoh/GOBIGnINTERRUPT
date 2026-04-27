@@ -111,7 +111,10 @@ local function fireAllReady(triggerSpell)
     end
 end
 
-function M.OnCast(unit, spellID, cdEntry)
+-- overrideDuration: when set (peer-comm path), use the sender's already-
+-- adjusted duration verbatim instead of running TalentSync.AdjustCD again.
+-- The sender already applied their own talent CDR.
+function M.OnCast(unit, spellID, cdEntry, overrideDuration)
     if not unit or not spellID or not cdEntry then return end
     local now = GetTime()
 
@@ -121,13 +124,18 @@ function M.OnCast(unit, spellID, cdEntry)
     if last and (now - last) < DEDUP then return end
     recent[unit][spellID] = now
 
-    -- Per-unit talent CDR: each peer broadcasts their active talent node IDs
-    -- via TalentSync; AdjustCD shrinks the duration for spells with reductions.
-    -- Falls back to the base duration when no talent data is known.
-    local baseDur = cdEntry.duration or 30
-    local effDur  = baseDur
-    if GBI.TalentSync and GBI.TalentSync.AdjustCD then
-        effDur = GBI.TalentSync.AdjustCD(unit, spellID, baseDur) or baseDur
+    -- Duration: peer-comm path uses sender's reported value verbatim
+    -- (already adjusted for their talents). Local detection paths apply
+    -- TalentSync.AdjustCD fresh.
+    local effDur
+    if type(overrideDuration) == "number" and overrideDuration > 0 then
+        effDur = overrideDuration
+    else
+        local baseDur = cdEntry.duration or 30
+        effDur = baseDur
+        if GBI.TalentSync and GBI.TalentSync.AdjustCD then
+            effDur = GBI.TalentSync.AdjustCD(unit, spellID, baseDur) or baseDur
+        end
     end
 
     -- record CD state
@@ -189,7 +197,7 @@ function M.OnCast(unit, spellID, cdEntry)
                 end
             end
         end
-        GBI.CDComm.Broadcast(spellID, cdEntry.duration or 30, ch, chMax)
+        GBI.CDComm.Broadcast(spellID, effDur, ch, chMax)
     end
 
     -- schedule the end-of-cooldown event

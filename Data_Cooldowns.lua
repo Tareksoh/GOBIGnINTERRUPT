@@ -113,7 +113,7 @@ GBI.Cooldowns = {
 [108416] = { name = "Dark Pact",           duration = 60, class = "WARLOCK",     category = K.CAT_DEFENSIVE },
 [122783] = { name = "Diffuse Magic",       duration = 90, class = "MONK",        category = K.CAT_DEFENSIVE },
 [122470] = { name = "Touch of Karma",      duration = 90, class = "MONK",        category = K.CAT_DEFENSIVE, spec = {3} },
-[115203] = { name = "Fortifying Brew",     duration = 120, class = "MONK",       category = K.CAT_DEFENSIVE },  -- MiniCC (WW/MW; BrM is 360 baseline)
+[115203] = { name = "Fortifying Brew",     duration = 240, class = "MONK",       category = K.CAT_DEFENSIVE },  -- per in-game observation; varies by spec/talents
 [22812]  = { name = "Barkskin",            duration = 60, class = "DRUID",       category = K.CAT_DEFENSIVE },
 [61336]  = { name = "Survival Instincts",  duration = 180, class = "DRUID",      category = K.CAT_DEFENSIVE },  -- OmniReborn
 [198589] = { name = "Blur",                duration = 60, class = "DEMONHUNTER", category = K.CAT_DEFENSIVE, spec = {1} },
@@ -157,7 +157,7 @@ GBI.Cooldowns = {
 [50334]  = { name = "Berserk (Guardian)",  duration = 180, class = "DRUID",      category = K.CAT_DEFENSIVE, spec = {3} },
 [102342] = { name = "Ironbark",            duration = 90,  class = "DRUID",      category = K.CAT_DEFENSIVE, spec = {4} },
 [357170] = { name = "Time Dilation",       duration = 60,  class = "EVOKER",     category = K.CAT_DEFENSIVE, spec = {2} },
-[1250646]= { name = "Takedown",            duration = 90,  class = "HUNTER",     category = K.CAT_BIGCD,     spec = {3} },
+[1250646]= { name = "Takedown",            duration = 60,  class = "HUNTER",     category = K.CAT_BIGCD,     spec = {3} },
 [132578] = { name = "Invoke Niuzao",       duration = 120, class = "MONK",       category = K.CAT_BIGCD,     spec = {1} },
 [116849] = { name = "Life Cocoon",         duration = 120, class = "MONK",       category = K.CAT_DEFENSIVE, spec = {3} },
 [64843]  = { name = "Divine Hymn",         duration = 180, class = "PRIEST",     category = K.CAT_DEFENSIVE, spec = {2} },
