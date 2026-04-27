@@ -24,11 +24,24 @@ local T = GBI.Taint
 
 local function laundered(rawNum)
     if rawNum == nil then return nil end
-    -- tostring on a secret-tagged number returns the right digits; tonumber
-    -- of that string yields a regular non-secret number.
+    -- Path 1: tostring -> tonumber. Works for clean values + most tagged
+    -- numbers (the tagging propagates through tostring digits in some
+    -- builds but the resulting tonumber still strips it).
     local ok, s = pcall(tostring, rawNum)
-    if not ok or not s then return nil end
-    return tonumber(s)
+    if ok and type(s) == "string" then
+        local n = tonumber(s)
+        if n then return n end
+    end
+    -- Path 2: string.format("%d", x). C-level integer formatting. The
+    -- output string is plain Lua (not a tagged Lua-string), so tonumber
+    -- works cleanly. Also pcall'd because format on a tagged number can
+    -- still throw in some builds.
+    local ok2, s2 = pcall(string.format, "%d", rawNum)
+    if ok2 and type(s2) == "string" then
+        local n = tonumber(s2)
+        if n then return n end
+    end
+    return nil
 end
 
 function T.SafeNumber(raw)
@@ -37,7 +50,10 @@ end
 
 function T.SafeSpellID(raw)
     local n = laundered(raw)
-    if n and n > 0 then return n end
+    if not n then return nil end
+    -- Comparison on a tainted number can throw; pcall the >0 check.
+    local ok, gt = pcall(function() return n > 0 end)
+    if ok and gt then return n end
     return nil
 end
 
