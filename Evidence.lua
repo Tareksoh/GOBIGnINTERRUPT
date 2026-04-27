@@ -69,9 +69,7 @@ local function pollPartyAuras()
                             local cd = GBI.GetCooldown(sid)
                             if cd then
                                 log("Debug", "poll-detect '%s' on %s -> %d", name, unit, sid)
-                                if GBI.Brain and GBI.Brain.OnCast then
-                                    GBI.Brain.OnCast(unit, sid, cd)
-                                end
+                                fire(unit, sid, cd)   -- routes through dedup
                             end
                         end
                     end
