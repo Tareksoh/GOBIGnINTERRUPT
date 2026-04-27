@@ -179,7 +179,9 @@ local function relayout(c)
     for _, e in ipairs(c.icons) do
         if e.icon:IsShown() then shown[#shown + 1] = e end
     end
-    table.sort(shown, function(a, b) return (a.endsAt or 0) < (b.endsAt or 0) end)
+    table.sort(shown, GBI.MakeIconSort and GBI.MakeIconSort(
+        GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.cdSort or "endsAt"
+    ) or function(a, b) return (a.endsAt or 0) < (b.endsAt or 0) end)
     local side = (anchorCfg())   -- first return = side
     for i, e in ipairs(shown) do
         e.icon:ClearAllPoints()

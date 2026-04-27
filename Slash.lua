@@ -25,8 +25,7 @@ local function help()
     print("  /gbi test cast    - simulate cd_cast sound")
     print("  /gbi test interrupt - simulate interrupt-alert sound")
     print("  /gbi int on|off          - toggle interrupt-halfway alert")
-    print("  /gbi int ratio <0..1>    - threshold as fraction of cast (default 0.5)")
-    print("  /gbi int fixed <s>       - threshold as fixed seconds from start")
+    print("  /gbi int delay <s>       - alert delay from cast start (default 0.2)")
     print("  /gbi sound <trigger> off|rotate|random|specific <file>")
     print("           trigger: ready | interrupt    (cast is gone)")
     print("  /gbi preview <file.ogg>  - play a sound file directly")
@@ -107,17 +106,13 @@ local function dispatch(msg)
         local cfg = GOBIGnINTERRUPTDB.interrupt
         if intRest == "on"  then cfg.enabled = true;  say("interrupt alert ON");  return end
         if intRest == "off" then cfg.enabled = false; say("interrupt alert OFF"); return end
-        local r = tonumber(intRest:match("^ratio%s+([%d%.]+)$"))
-        if r and r > 0 and r <= 1 then
-            cfg.mode = "ratio"; cfg.ratio = r
-            say(("threshold = %.0f%% of cast"):format(r * 100)); return
-        end
-        local s = tonumber(intRest:match("^fixed%s+([%d%.]+)$"))
+        local s = tonumber(intRest:match("^delay%s+([%d%.]+)$"))
+                or tonumber(intRest:match("^fixed%s+([%d%.]+)$"))
         if s and s > 0 then
-            cfg.mode = "fixed"; cfg.seconds = s
-            say(("threshold = fixed %.2fs from cast start"):format(s)); return
+            cfg.seconds = s
+            say(("delay = %.2fs from cast start"):format(s)); return
         end
-        say("usage: /gbi int on | off | ratio <0..1> | fixed <seconds>")
+        say("usage: /gbi int on | off | delay <seconds>")
         return
     end
 

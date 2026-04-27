@@ -20,9 +20,6 @@
 -- SavedVariables:
 --   GOBIGnINTERRUPTDB.interrupt = {
 --       enabled = true,
---       mode    = "ratio" | "fixed",   -- "ratio" is preserved but currently
---                                       -- behaves the same as "fixed" (see above)
---       ratio   = 0.5,                 -- saved but unused at runtime
 --       seconds = 0.2,                 -- delay from cast start to alert
 --   }
 
@@ -43,9 +40,10 @@ local function ensureCfg()
     GOBIGnINTERRUPTDB.interrupt = GOBIGnINTERRUPTDB.interrupt or {}
     local c = GOBIGnINTERRUPTDB.interrupt
     if c.enabled == nil then c.enabled = true end
-    c.mode    = c.mode    or "fixed"
-    c.ratio   = c.ratio   or 0.5
     c.seconds = c.seconds or 0.2
+    -- Stale schema fields cleared (mode/ratio were never read at runtime).
+    c.mode  = nil
+    c.ratio = nil
     return c
 end
 

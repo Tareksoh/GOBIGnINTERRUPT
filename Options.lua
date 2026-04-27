@@ -506,9 +506,33 @@ local function buildPanel()
     local intControls = makeBarControls(content, barHeader, -8, "interrupts", "Interrupts window", true)
     local cdControls  = makeBarControls(content, intControls, -28, "cooldowns",  "Cooldowns window", false)
 
+    -- Cooldown sort dropdown (also applies to UnitOverlay).
+    local sortLbl = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    sortLbl:SetPoint("TOPLEFT", cdControls, "BOTTOMLEFT", 0, -16)
+    sortLbl:SetText("Cooldown sort")
+    local sortDD = CreateFrame("DropdownButton", nil, content, "WowStyle1DropdownTemplate")
+    sortDD:SetPoint("LEFT", sortLbl, "RIGHT", 8, 0); sortDD:SetWidth(220)
+    local SORT_LIST = {
+        { key = "endsAt",   label = "By remaining CD (default)" },
+        { key = "offFirst", label = "Offensive first" },
+        { key = "defFirst", label = "Defensive first" },
+    }
+    local function curSort() return db().cdSort or "endsAt" end
+    sortDD:SetupMenu(function(_, root)
+        for _, s in ipairs(SORT_LIST) do
+            root:CreateRadio(s.label, function() return curSort() == s.key end, function()
+                db().cdSort = s.key
+                if GBI.Bar and GBI.Bar.ApplyAllBars then GBI.Bar.ApplyAllBars() end
+                if GBI.UnitOverlay and GBI.UnitOverlay.Refresh then GBI.UnitOverlay.Refresh() end
+                sortDD:GenerateMenu()
+            end)
+        end
+    end)
+    sortDD:SetScript("OnShow", function() sortDD:GenerateMenu() end)
+
     -- ============= 2. Interrupt alert ============= --
     local intHeader = content:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    intHeader:SetPoint("TOPLEFT", cdControls, "BOTTOMLEFT", -16, -28)
+    intHeader:SetPoint("TOPLEFT", sortDD, "BOTTOMLEFT", -16, -28)
     intHeader:SetText("Interrupt-pull alert")
 
     local intEnable = CreateFrame("CheckButton", nil, content,"UICheckButtonTemplate")

@@ -1,21 +1,19 @@
--- UNIT_AURA evidence. Phase 3 brought forward to Phase 1.
+-- UNIT_AURA evidence — fallback detection for party CDs when
+-- UNIT_SPELLCAST_SUCCEEDED's spellID is redacted in 12.0.5.
 --
--- In Midnight 12.0.5, UNIT_SPELLCAST_SUCCEEDED's spellID is fully redacted
--- to nil for OTHER party members. We can't read it, can't scrub it. Local
--- cast detection for party1..party4 is dead.
---
--- Workaround: listen for UNIT_AURA on each party member. When a known CD's
--- buff appears (e.g. Avenging Wrath aura applies to a paladin), infer that
--- the player just cast that spell and forward to Brain.
+-- Strategy: listen for UNIT_AURA on each party member; when a known CD's
+-- buff appears (by spellId or by spell name via AuraMap), infer that the
+-- player just cast that spell and forward to Brain. A polling fallback
+-- (C_UnitAuras every 0.75s) covers configurations where UNIT_AURA is also
+-- silent for remote-PC party members.
 --
 -- Limitations:
---   * Won't catch pure interrupts (Pummel, Kick, etc.) — those leave no buff.
---   * Won't catch CDs where the buff aura ID differs from the cast spell ID.
---     For Phase 1 we assume aura ID == cast spell ID; that holds for the
---     majority of tracked Data_Cooldowns entries (defensives, big CDs).
+--   * Pure interrupts (kicks) leave no buff — handled by KickCounter.lua
+--     and CDComm.lua's peer broadcast instead.
+--   * CDs whose buff ID != cast ID resolve via spell-name matching.
 --
--- Brain already dedups by 250ms, so when our own cast is detected via both
--- UNIT_SPELLCAST_SUCCEEDED *and* UNIT_AURA we don't double-fire.
+-- Brain already dedups by 250ms, so the same cast detected via UNIT_SPELLCAST,
+-- UNIT_AURA, polling, and CDComm doesn't fire multiple times.
 
 GOBIGnINTERRUPT = GOBIGnINTERRUPT or {}
 local GBI = GOBIGnINTERRUPT

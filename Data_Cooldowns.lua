@@ -177,16 +177,24 @@ GBI.Cooldowns = {
 -- returns the entry table or nil.
 function GBI.GetCooldown(spellID)
     if type(spellID) ~= "number" then return nil end
-    -- User overrides: disabled list wins, then custom list, then built-in.
     local sdb = GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.spellDb
-    if sdb then
-        if sdb.disabled and sdb.disabled[spellID] then return nil end
-        if sdb.custom and sdb.custom[spellID] then return sdb.custom[spellID] end
+    -- Custom override wins.
+    local cd
+    if sdb and sdb.custom and sdb.custom[spellID] then
+        cd = sdb.custom[spellID]
+    else
+        -- Built-in: pcall the index so a secret-tagged key misses cleanly.
+        local ok, c = pcall(function() return GBI.Cooldowns[spellID] end)
+        if ok then cd = c end
     end
-    -- spellID may be secret-tagged from remote-PC party UNIT_SPELLCAST events;
-    -- pcall the index so a tainted key misses cleanly instead of throwing.
-    local ok, cd = pcall(function() return GBI.Cooldowns[spellID] end)
-    if not ok then return nil end
+    if not cd then return nil end
+    -- Disabled list: respect user choice, BUT interrupts are always tracked
+    -- internally so the Interrupts bar/kick counter keep working even if
+    -- the user accidentally unticks them in the Spell DB UI.
+    if sdb and sdb.disabled and sdb.disabled[spellID]
+       and cd.category ~= GBI.K.CAT_INTERRUPT then
+        return nil
+    end
     return cd
 end
 

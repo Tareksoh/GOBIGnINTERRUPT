@@ -49,6 +49,51 @@ end
 
 local function log(level, ...) if GBI.Log then GBI.Log[level]("bar", ...) end end
 
+-- Sort comparator for cooldown rows. Modes:
+--   "endsAt"   - default: live entries first by remaining CD, placeholders last
+--   "offFirst" - offensive (BIGCD/OFFENSIVE) first, defensive next, utility last
+--   "defFirst" - defensive first, offensive next, utility last
+-- Within each category bucket, live entries sort by endsAt then placeholders.
+local CAT_RANK = {
+    offFirst = { [K.CAT_BIGCD] = 0, [K.CAT_OFFENSIVE] = 0,
+                 [K.CAT_DEFENSIVE] = 1,
+                 [K.CAT_UTILITY] = 2, [K.CAT_DISPEL] = 2,
+                 [K.CAT_INTERRUPT] = 3 },
+    defFirst = { [K.CAT_DEFENSIVE] = 0,
+                 [K.CAT_BIGCD] = 1, [K.CAT_OFFENSIVE] = 1,
+                 [K.CAT_UTILITY] = 2, [K.CAT_DISPEL] = 2,
+                 [K.CAT_INTERRUPT] = 3 },
+}
+function GBI.MakeIconSort(mode)
+    if not mode or mode == "endsAt" then
+        return function(a, b)
+            local al = a.endsAt ~= nil; local bl = b.endsAt ~= nil
+            if al ~= bl then return al end
+            if al then return a.endsAt < b.endsAt end
+            return (a.spellID or 0) < (b.spellID or 0)
+        end
+    end
+    local rank = CAT_RANK[mode]
+    return function(a, b)
+        local function getCat(e)
+            if not e.spellID then return nil end
+            local cd = GBI.GetCooldown and GBI.GetCooldown(e.spellID)
+            return cd and cd.category or nil
+        end
+        local ra = rank[getCat(a) or K.CAT_UTILITY] or 99
+        local rb = rank[getCat(b) or K.CAT_UTILITY] or 99
+        if ra ~= rb then return ra < rb end
+        local al = a.endsAt ~= nil; local bl = b.endsAt ~= nil
+        if al ~= bl then return al end
+        if al then return a.endsAt < b.endsAt end
+        return (a.spellID or 0) < (b.spellID or 0)
+    end
+end
+
+local function sortMode()
+    return GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.cdSort or "endsAt"
+end
+
 -- A "bar instance" packs the anchor + per-unit rows + icon pool for one
 -- category group. We build two of them.
 local function newBar(spec)
@@ -482,7 +527,7 @@ local function newBar(spec)
         for unit, list in pairs(self.icons) do
             local visible = {}
             for _, e in ipairs(list) do if e.icon:IsShown() then visible[#visible+1] = e end end
-            table.sort(visible, function(a, b) local al=a.endsAt~=nil; local bl=b.endsAt~=nil; if al~=bl then return al end; if al then return a.endsAt<b.endsAt end; return (a.spellID or 0)<(b.spellID or 0) end)
+            table.sort(visible, GBI.MakeIconSort(sortMode()))
             local row = self.rows[unit]
             local perRow = effPerRow()
             local stride = effIcon() + ICON_GAP
@@ -553,7 +598,7 @@ local function newBar(spec)
             for _, e in ipairs(list) do
                 if e.icon:IsShown() then visible[#visible + 1] = e end
             end
-            table.sort(visible, function(a, b) local al=a.endsAt~=nil; local bl=b.endsAt~=nil; if al~=bl then return al end; if al then return a.endsAt<b.endsAt end; return (a.spellID or 0)<(b.spellID or 0) end)
+            table.sort(visible, GBI.MakeIconSort(sortMode()))
             local perRow = effPerRow()
             local stride = effIcon() + ICON_GAP
             local grow = effGrowDir()
