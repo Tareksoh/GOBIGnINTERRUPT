@@ -29,8 +29,9 @@ local label                       -- fontstring on the interrupt bar
 local function log(level, ...) if GBI.Log then GBI.Log[level]("kicks", ...) end end
 
 local function isInterruptSpell(spellID)
-    if type(spellID) ~= "number" then return false end
-    local cd = GBI.Cooldowns and GBI.Cooldowns[spellID]
+    -- Use GBI.GetCooldown as the single chokepoint - it pcalls the table
+    -- index so secret-tagged spellIDs miss cleanly instead of throwing.
+    local cd = GBI.GetCooldown and GBI.GetCooldown(spellID)
     return cd and cd.category == K.CAT_INTERRUPT
 end
 

@@ -152,5 +152,10 @@ GBI.Cooldowns = {
 -- returns the entry table or nil.
 function GBI.GetCooldown(spellID)
     if type(spellID) ~= "number" then return nil end
-    return GBI.Cooldowns[spellID]
+    -- spellID may be secret-tagged from remote-PC party UNIT_SPELLCAST events;
+    -- type() can't detect this, so pcall the index so a tainted key misses
+    -- cleanly instead of throwing.
+    local ok, cd = pcall(function() return GBI.Cooldowns[spellID] end)
+    if not ok then return nil end
+    return cd
 end
