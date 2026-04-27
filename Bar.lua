@@ -703,16 +703,18 @@ end
 
 function M.Show()
     local s = showCfg()
+    -- Interrupts bar
     if s.interruptBar ~= false then barInt.Show() else barInt.Hide() end
-    if s.cooldownBar ~= false and not unitOverlayActive() then
-        barCD.Show()
+    -- Cooldowns bar / overlay. cooldownBar == false hides BOTH; otherwise
+    -- pick between the bar window and the unit-frame overlay.
+    if s.cooldownBar == false then
+        barCD.Hide()
         if GBI.UnitOverlay and GBI.UnitOverlay.Hide then GBI.UnitOverlay.Hide() end
     elseif unitOverlayActive() then
         barCD.Hide()
         if GBI.UnitOverlay and GBI.UnitOverlay.Show then GBI.UnitOverlay.Show() end
     else
-        -- cooldownBar disabled and overlay off: hide both
-        barCD.Hide()
+        barCD.Show()
         if GBI.UnitOverlay and GBI.UnitOverlay.Hide then GBI.UnitOverlay.Hide() end
     end
 end
