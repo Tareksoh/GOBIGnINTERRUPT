@@ -202,20 +202,28 @@ M._relayout = relayout
 -- Spec-aware placeholder pre-population: dim icons for every CD a unit
 -- could use, regardless of whether it's been observed yet.
 function M.PopulatePlaceholders(unit)
-    if not (GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.placeholders
-        and GOBIGnINTERRUPTDB.placeholders.enabled ~= false) then return end
     if not GBI.SpellsForUnit then return end
     local c = ensureContainer(unit)
     if not c then return end
 
-    -- Prune placeholders that no longer match the unit's class+spec.
+    local placeholdersOn = GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.placeholders
+        and GOBIGnINTERRUPTDB.placeholders.enabled ~= false
+
+    -- Prune any icon whose spell isn't in the expected set (spec changed
+    -- or user disabled it). Placeholders also hide when feature is off.
     local expected = {}
     for _, e in ipairs(GBI.SpellsForUnit(unit)) do expected[e.sid] = true end
     for _, x in ipairs(c.icons) do
-        if x.placeholder and x.spellID and not expected[x.spellID] then
+        if x.spellID and (not expected[x.spellID]
+            or (x.placeholder and not placeholdersOn)) then
             x.icon:Hide()
+            x.spellID = nil       -- free the slot for reuse
+            x.endsAt = nil
+            x.placeholder = false
         end
     end
+
+    if not placeholdersOn then return end
 
     for _, e in ipairs(GBI.SpellsForUnit(unit)) do
         local cd = e.cd

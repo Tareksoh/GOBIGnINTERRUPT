@@ -343,27 +343,31 @@ local function newBar(spec)
     -- arrives, OnCDStart finds the existing entry by spellID and converts
     -- it to a live icon (un-dim, set endsAt, run cooldown swipe).
     function self.PopulatePlaceholders(unit)
-        if not (GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.placeholders
-            and GOBIGnINTERRUPTDB.placeholders.enabled ~= false) then return end
         if not GBI.SpellsForUnit then return end
         local row = self.rows[unit]
         if not row then return end
         local list = self.icons[unit] or {}
         self.icons[unit] = list
 
-        -- Build expected spell-ID set for this unit's class+spec.
+        local placeholdersOn = GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.placeholders
+            and GOBIGnINTERRUPTDB.placeholders.enabled ~= false
+
+        -- Build expected spell-ID set (already filtered by class+spec+disabled).
         local expected = {}
         for _, e in ipairs(GBI.SpellsForUnit(unit)) do expected[e.sid] = true end
 
-        -- Prune placeholder entries no longer in the expected set (spec changed
-        -- or initial permissive list got pruned once inspect resolved).
+        -- Prune ANY entry whose spell is no longer in the expected set
+        -- (spec changed, or user disabled the spell mid-run). Also prune
+        -- all placeholders if the feature is toggled off.
         for i = #list, 1, -1 do
             local x = list[i]
-            if x.placeholder and not expected[x.spellID] then
+            if not expected[x.spellID] or (x.placeholder and not placeholdersOn) then
                 x.icon:Hide()
                 table.remove(list, i)
             end
         end
+
+        if not placeholdersOn then return end
 
         for _, e in ipairs(GBI.SpellsForUnit(unit)) do
             local cd = e.cd
@@ -601,11 +605,13 @@ local function dispatch(state, fnName, unit, spellID)
     else
         if unitOverlayActive() then
             local ov = GBI.UnitOverlay
-            -- The overlay visibility may have been flipped off by an engine
-            -- state change (M.Hide on context=world). Re-ensure it's shown
-            -- whenever we have a CD to paint and the user has the option on.
-            if ov.Show then ov.Show() end
-            if ov[fnName] then ov[fnName](unit, spellID, state) end
+            if ov then
+                if ov.Show then ov.Show() end
+                if ov[fnName] then ov[fnName](unit, spellID, state) end
+            else
+                -- overlay module not loaded; fall back to bar
+                barCD[fnName](unit, spellID, state)
+            end
         else
             barCD[fnName](unit, spellID, state)
         end
