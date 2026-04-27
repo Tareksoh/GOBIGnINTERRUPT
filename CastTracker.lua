@@ -67,7 +67,11 @@ f:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
         end
     end
 
-    if not spellID then return end
+    if not spellID then
+        log("Debug", "  skip: cannot resolve spellID for %s (raw=%s, castGUID=%s)",
+            unit, tostring(rawSpellID), tostring(arg2))
+        return
+    end
 
     local cd = GBI.GetCooldown(spellID)
     if not cd then
