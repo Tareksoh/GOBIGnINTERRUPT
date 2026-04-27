@@ -55,16 +55,25 @@ local function burstMode()
     return (b and b.mode) or "auto"
 end
 
+-- Only OFFENSIVE big-CD spells qualify for the burst-ready trigger.
+-- Defensives, dispels, utility never count toward "all-ready burst".
+local function isOffensiveCD(sid)
+    local cd = GBI.GetCooldown and GBI.GetCooldown(sid)
+    return cd and (cd.category == K.CAT_BIGCD or cd.category == K.CAT_OFFENSIVE)
+end
+
 local function effectiveSet()
     local out = {}
     local mode = burstMode()
     if mode == "manual" or mode == "both" then
         for _, sid in ipairs((GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.allReadyList) or {}) do
-            out[sid] = true
+            if isOffensiveCD(sid) then out[sid] = true end
         end
     end
     if mode == "auto" or mode == "both" then
-        for sid in pairs(seenBig) do out[sid] = true end
+        for sid in pairs(seenBig) do
+            if isOffensiveCD(sid) then out[sid] = true end
+        end
     end
     return out
 end

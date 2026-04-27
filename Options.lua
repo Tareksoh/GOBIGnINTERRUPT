@@ -607,7 +607,7 @@ local function buildPanel()
     }
     local SPEC_NAMES = {
         DEATHKNIGHT = { "Blood", "Frost", "Unholy" },
-        DEMONHUNTER = { "Havoc", "Vengeance" },
+        DEMONHUNTER = { "Havoc", "Vengeance", "Devourer" },
         DRUID       = { "Balance", "Feral", "Guardian", "Restoration" },
         EVOKER      = { "Devastation", "Preservation", "Augmentation" },
         HUNTER      = { "Beast Mastery", "Marksmanship", "Survival" },
@@ -622,6 +622,7 @@ local function buildPanel()
     }
     local currentClass = CLASS_LIST[1]
     local currentSpec  = nil   -- nil = all specs
+    local currentCat   = "ALL" -- ALL | OFFENSIVE | DEFENSIVE | INTERRUPT | UTILITY
 
     local listScroll = CreateFrame("ScrollFrame", nil, content, "UIPanelScrollFrameTemplate")
     listScroll:SetPoint("TOPLEFT", classDD, "BOTTOMLEFT", 0, -8)
@@ -649,7 +650,17 @@ local function buildPanel()
                         end
                     end
                 end
-                if specOK then
+                local catOK = true
+                if currentCat == "OFFENSIVE" then
+                    catOK = cd.category == K.CAT_BIGCD or cd.category == K.CAT_OFFENSIVE
+                elseif currentCat == "DEFENSIVE" then
+                    catOK = cd.category == K.CAT_DEFENSIVE
+                elseif currentCat == "INTERRUPT" then
+                    catOK = cd.category == K.CAT_INTERRUPT
+                elseif currentCat == "UTILITY" then
+                    catOK = cd.category == K.CAT_UTILITY or cd.category == K.CAT_DISPEL
+                end
+                if specOK and catOK then
                     matches[#matches + 1] = { sid = sid, cd = cd }
                 end
             end
@@ -716,6 +727,24 @@ local function buildPanel()
         end
     end)
     specDD:SetScript("OnShow", function() specDD:GenerateMenu() end)
+
+    local catDD = CreateFrame("DropdownButton", nil, content, "WowStyle1DropdownTemplate")
+    catDD:SetPoint("LEFT", specDD, "RIGHT", 8, 0); catDD:SetWidth(140)
+    local CAT_LIST = {
+        { key = "ALL",        label = "All categories" },
+        { key = "OFFENSIVE",  label = "Offensive" },
+        { key = "DEFENSIVE",  label = "Defensive" },
+        { key = "INTERRUPT",  label = "Interrupt" },
+        { key = "UTILITY",    label = "Utility / Dispel" },
+    }
+    catDD:SetupMenu(function(_, root)
+        for _, c in ipairs(CAT_LIST) do
+            root:CreateRadio(c.label, function() return currentCat == c.key end, function()
+                currentCat = c.key; rebuildList(); catDD:GenerateMenu()
+            end)
+        end
+    end)
+    catDD:SetScript("OnShow", function() catDD:GenerateMenu() end)
 
     -- Add custom spell row
     local addLabel = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
