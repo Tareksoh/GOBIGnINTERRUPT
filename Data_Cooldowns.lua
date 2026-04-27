@@ -216,13 +216,21 @@ function GBI.SpellsForUnit(unit)
     return out
 end
 
--- Iterate all entries (built-in + custom). Caller filters by class etc.
-function GBI.IterCooldowns()
+-- Iterate all entries (built-in + custom), skipping disabled. Caller filters
+-- by class etc. The two arities exist so the Spell DB UI can request the
+-- complete list (including disabled) for display, while runtime callers
+-- (SpellsForUnit, placeholders, etc.) get only the active subset.
+function GBI.IterCooldowns(includeDisabled)
     local merged = {}
-    for sid, cd in pairs(GBI.Cooldowns) do merged[sid] = cd end
-    local sdb = GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.spellDb
-    if sdb and sdb.custom then
-        for sid, cd in pairs(sdb.custom) do merged[sid] = cd end
+    local sdb = GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.spellDb or {}
+    local disabled = sdb.disabled or {}
+    for sid, cd in pairs(GBI.Cooldowns) do
+        if includeDisabled or not disabled[sid] then merged[sid] = cd end
+    end
+    if sdb.custom then
+        for sid, cd in pairs(sdb.custom) do
+            if includeDisabled or not disabled[sid] then merged[sid] = cd end
+        end
     end
     return merged
 end
