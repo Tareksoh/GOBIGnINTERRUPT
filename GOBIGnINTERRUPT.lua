@@ -32,6 +32,7 @@ local DEFAULTS = {
                                             -- auto | manual | both (see Brain.lua)
     spellDb         = { disabled = {}, custom = {} },  -- user overrides
     comm            = { enabled = true },              -- peer CD-sharing broadcast
+    placeholders    = { enabled = true },               -- spec-aware placeholder pre-population
 }
 
 local SCHEMA_VERSION = 4

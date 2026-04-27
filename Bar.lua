@@ -204,6 +204,7 @@ local function newBar(spec)
                     row:SetPoint("TOPLEFT", self.anchor, "TOPLEFT",
                         8, -8 - visibleIdx * (effRowH() + ROW_GAP))
                     visibleIdx = visibleIdx + 1
+                    if self.PopulatePlaceholders then self.PopulatePlaceholders(unit) end
                 else
                     row:Hide()
                 end
@@ -324,6 +325,51 @@ local function newBar(spec)
     end
     self.ensureAnchor = ensureAnchor
 
+    -- Spec-aware placeholder pre-population. For each unit, look up the
+    -- tracked spells matching their class+spec and create dim/desaturated
+    -- icons for spells that haven't been observed yet. When a real cast
+    -- arrives, OnCDStart finds the existing entry by spellID and converts
+    -- it to a live icon (un-dim, set endsAt, run cooldown swipe).
+    function self.PopulatePlaceholders(unit)
+        if not (GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.placeholders
+            and GOBIGnINTERRUPTDB.placeholders.enabled ~= false) then return end
+        if not GBI.SpellsForUnit then return end
+        local row = self.rows[unit]
+        if not row then return end
+        local list = self.icons[unit] or {}
+        self.icons[unit] = list
+        for _, e in ipairs(GBI.SpellsForUnit(unit)) do
+            local cd = e.cd
+            local include = (spec.progressBar and cd.category == K.CAT_INTERRUPT)
+                         or (not spec.progressBar and cd.category ~= K.CAT_INTERRUPT
+                                                  and cd.category ~= K.CAT_DISPEL
+                                                  and cd.category ~= K.CAT_UTILITY)
+            if include then
+                local exists
+                for _, x in ipairs(list) do
+                    if x.spellID == e.sid then exists = x; break end
+                end
+                if not exists then
+                    local icon = CreateFrame("Frame", nil, row)
+                    icon:SetSize(effIcon(), effIcon())
+                    local t = icon:CreateTexture(nil, "ARTWORK"); t:SetAllPoints(icon)
+                    icon.tex = t
+                    local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(e.sid)
+                    t:SetTexture(info and info.iconID or "Interface\\Icons\\INV_Misc_QuestionMark")
+                    t:SetDesaturated(true)
+                    icon:SetAlpha(0.4)
+                    local cooldown = CreateFrame("Cooldown", nil, icon, "CooldownFrameTemplate")
+                    cooldown:SetAllPoints(icon)
+                    icon.cooldown = cooldown
+                    table.insert(list, { icon = icon, cooldown = cooldown,
+                        spellID = e.sid, endsAt = nil, placeholder = true })
+                    icon:Show()
+                end
+            end
+        end
+        if self.applyScale then self.applyScale() end
+    end
+
     local function restorePosition()
         local saved = GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.bars and GOBIGnINTERRUPTDB.bars[spec.key]
         if not (self.anchor and saved) then return end
@@ -405,7 +451,7 @@ local function newBar(spec)
         for unit, list in pairs(self.icons) do
             local visible = {}
             for _, e in ipairs(list) do if e.icon:IsShown() then visible[#visible+1] = e end end
-            table.sort(visible, function(a, b) return (a.endsAt or 0) < (b.endsAt or 0) end)
+            table.sort(visible, function(a, b) local al=a.endsAt~=nil; local bl=b.endsAt~=nil; if al~=bl then return al end; if al then return a.endsAt<b.endsAt end; return (a.spellID or 0)<(b.spellID or 0) end)
             local row = self.rows[unit]
             local perRow = effPerRow()
             local stride = effIcon() + ICON_GAP
@@ -462,6 +508,11 @@ local function newBar(spec)
         entry.icon.tex:SetTexture(iconPath)
         entry.cooldown:SetCooldown(state.startedAt, state.endsAt - state.startedAt)
         entry.icon:Show()
+        if entry.placeholder then
+            entry.placeholder = false
+            entry.icon:SetAlpha(1.0)
+            if entry.icon.tex then entry.icon.tex:SetDesaturated(false) end
+        end
         if entry.glowing then hideGlow(entry.icon); entry.glowing = false end
 
         if spec.progressBar then
@@ -471,7 +522,7 @@ local function newBar(spec)
             for _, e in ipairs(list) do
                 if e.icon:IsShown() then visible[#visible + 1] = e end
             end
-            table.sort(visible, function(a, b) return (a.endsAt or 0) < (b.endsAt or 0) end)
+            table.sort(visible, function(a, b) local al=a.endsAt~=nil; local bl=b.endsAt~=nil; if al~=bl then return al end; if al then return a.endsAt<b.endsAt end; return (a.spellID or 0)<(b.spellID or 0) end)
             local perRow = effPerRow()
             local stride = effIcon() + ICON_GAP
             local grow = effGrowDir()

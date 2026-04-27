@@ -199,6 +199,41 @@ M._relayout = relayout
 
 -- Public ---------------------------------------------------------------
 
+-- Spec-aware placeholder pre-population: dim icons for every CD a unit
+-- could use, regardless of whether it's been observed yet.
+function M.PopulatePlaceholders(unit)
+    if not (GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.placeholders
+        and GOBIGnINTERRUPTDB.placeholders.enabled ~= false) then return end
+    if not GBI.SpellsForUnit then return end
+    local c = ensureContainer(unit)
+    if not c then return end
+    for _, e in ipairs(GBI.SpellsForUnit(unit)) do
+        local cd = e.cd
+        if cd.category ~= K.CAT_INTERRUPT
+           and cd.category ~= K.CAT_DISPEL
+           and cd.category ~= K.CAT_UTILITY then
+            local exists
+            for _, x in ipairs(c.icons) do
+                if x.spellID == e.sid then exists = x; break end
+            end
+            if not exists then
+                local entry = getIconEntry(c)
+                if entry then
+                    entry.spellID = e.sid
+                    entry.endsAt = nil
+                    entry.placeholder = true
+                    local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(e.sid)
+                    entry.icon.tex:SetTexture(info and info.iconID or "Interface\\Icons\\INV_Misc_QuestionMark")
+                    entry.icon.tex:SetDesaturated(true)
+                    entry.icon:SetAlpha(0.4)
+                    entry.icon:Show()
+                end
+            end
+        end
+    end
+    if M._relayout then M._relayout(c) end
+end
+
 function M.OnCDStart(unit, spellID, state)
     if not visible then
         log("Debug", "OnCDStart visible=false (overlay hidden) unit=%s spell=%d", unit, spellID); return
@@ -207,9 +242,16 @@ function M.OnCDStart(unit, spellID, state)
     if not c then
         log("Info", "OnCDStart no host frame for unit=%s spell=%d", unit, spellID); return
     end
-    local entry = getIconEntry(c)
+    -- Reuse placeholder/live entry for the same spell, else allocate.
+    local entry
+    for _, e in ipairs(c.icons) do
+        if e.spellID == spellID then entry = e; break end
+    end
     if not entry then
-        log("Info", "OnCDStart no free icon (max=%d) unit=%s", MAX_ICONS, unit); return
+        entry = getIconEntry(c)
+        if not entry then
+            log("Info", "OnCDStart no free icon (max=%d) unit=%s", MAX_ICONS, unit); return
+        end
     end
     log("Debug", "OnCDStart unit=%s spell=%d host=%s",
         unit, spellID, c.host:GetName() or "?")
@@ -217,6 +259,11 @@ function M.OnCDStart(unit, spellID, state)
     entry.endsAt  = state.endsAt
     local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellID)
     entry.icon.tex:SetTexture((info and info.iconID) or "Interface\\Icons\\INV_Misc_QuestionMark")
+    if entry.placeholder then
+        entry.placeholder = false
+        entry.icon:SetAlpha(1.0)
+        entry.icon.tex:SetDesaturated(false)
+    end
     entry.cooldown:SetCooldown(state.startedAt, state.endsAt - state.startedAt)
     entry.icon:Show()
     relayout(c)
@@ -234,7 +281,10 @@ end
 
 function M.Show()
     visible = true
-    for _, unit in ipairs(K.PARTY_UNITS) do ensureContainer(unit) end
+    for _, unit in ipairs(K.PARTY_UNITS) do
+        ensureContainer(unit)
+        if M.PopulatePlaceholders then M.PopulatePlaceholders(unit) end
+    end
 end
 
 function M.Hide()
@@ -312,10 +362,15 @@ local rf = CreateFrame("Frame")
 rf:RegisterEvent("GROUP_ROSTER_UPDATE")
 rf:RegisterEvent("PLAYER_ENTERING_WORLD")
 rf:RegisterEvent("RAID_ROSTER_UPDATE")
+rf:RegisterEvent("INSPECT_READY")
+rf:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
 rf:SetScript("OnEvent", function()
     if not visible then return end
     for _, unit in ipairs(K.PARTY_UNITS) do
-        if UnitExists(unit) then ensureContainer(unit) end
+        if UnitExists(unit) then
+            ensureContainer(unit)
+            if M.PopulatePlaceholders then M.PopulatePlaceholders(unit) end
+        end
     end
 end)
 

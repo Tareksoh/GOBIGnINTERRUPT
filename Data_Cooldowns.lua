@@ -190,6 +190,32 @@ function GBI.GetCooldown(spellID)
     return cd
 end
 
+-- All tracked CDs available to a given unit (class + spec match).
+-- Permissive on unknown spec.
+function GBI.SpellsForUnit(unit)
+    local out = {}
+    if not unit or not UnitExists(unit) then return out end
+    local _, classToken = UnitClass(unit)
+    if not classToken then return out end
+    local guid = GBI.Taint and GBI.Taint.SafeGUID and GBI.Taint.SafeGUID(unit)
+    local spec = guid and GBI.Inspect and GBI.Inspect.GetSpecByGUID
+        and GBI.Inspect.GetSpecByGUID(guid) or nil
+    local entries = GBI.IterCooldowns and GBI.IterCooldowns() or GBI.Cooldowns or {}
+    for sid, cd in pairs(entries) do
+        if cd and cd.class == classToken then
+            local specOK = true
+            if cd.spec and spec then
+                specOK = false
+                for _, s in ipairs(cd.spec) do
+                    if s == spec then specOK = true; break end
+                end
+            end
+            if specOK then out[#out + 1] = { sid = sid, cd = cd } end
+        end
+    end
+    return out
+end
+
 -- Iterate all entries (built-in + custom). Caller filters by class etc.
 function GBI.IterCooldowns()
     local merged = {}
