@@ -177,10 +177,26 @@ GBI.Cooldowns = {
 -- returns the entry table or nil.
 function GBI.GetCooldown(spellID)
     if type(spellID) ~= "number" then return nil end
+    -- User overrides: disabled list wins, then custom list, then built-in.
+    local sdb = GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.spellDb
+    if sdb then
+        if sdb.disabled and sdb.disabled[spellID] then return nil end
+        if sdb.custom and sdb.custom[spellID] then return sdb.custom[spellID] end
+    end
     -- spellID may be secret-tagged from remote-PC party UNIT_SPELLCAST events;
-    -- type() can't detect this, so pcall the index so a tainted key misses
-    -- cleanly instead of throwing.
+    -- pcall the index so a tainted key misses cleanly instead of throwing.
     local ok, cd = pcall(function() return GBI.Cooldowns[spellID] end)
     if not ok then return nil end
     return cd
+end
+
+-- Iterate all entries (built-in + custom). Caller filters by class etc.
+function GBI.IterCooldowns()
+    local merged = {}
+    for sid, cd in pairs(GBI.Cooldowns) do merged[sid] = cd end
+    local sdb = GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.spellDb
+    if sdb and sdb.custom then
+        for sid, cd in pairs(sdb.custom) do merged[sid] = cd end
+    end
+    return merged
 end

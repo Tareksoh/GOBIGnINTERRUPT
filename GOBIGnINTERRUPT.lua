@@ -30,6 +30,7 @@ local DEFAULTS = {
                                             -- and the cooldown bar window hides.
     burst           = { mode = "auto" },   -- burst-ready trigger source:
                                             -- auto | manual | both (see Brain.lua)
+    spellDb         = { disabled = {}, custom = {} },  -- user overrides
 }
 
 local SCHEMA_VERSION = 4

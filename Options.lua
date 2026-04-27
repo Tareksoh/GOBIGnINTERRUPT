@@ -587,6 +587,135 @@ local function buildPanel()
     burstList:SetPoint("TOPLEFT", modeLabel, "BOTTOMLEFT", 0, -12)
     panel._burstList = burstList
 
+    -- ============= 4. Spell DB management ============= --
+    local sdbHeader = content:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    sdbHeader:SetPoint("TOPLEFT", burstList, "BOTTOMLEFT", 0, -28)
+    sdbHeader:SetText("Spell database")
+
+    local sdbHelp = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    sdbHelp:SetPoint("TOPLEFT", sdbHeader, "BOTTOMLEFT", 0, -2)
+    sdbHelp:SetText("Pick a class, untick spells you don't want tracked, or add custom spell IDs.")
+    sdbHelp:SetTextColor(0.7, 0.7, 0.7)
+
+    local classDD = CreateFrame("DropdownButton", nil, content, "WowStyle1DropdownTemplate")
+    classDD:SetPoint("TOPLEFT", sdbHelp, "BOTTOMLEFT", 0, -8)
+    classDD:SetWidth(160)
+
+    local CLASS_LIST = K.CLASS_TOKENS or {
+        "DEATHKNIGHT", "DEMONHUNTER", "DRUID", "EVOKER", "HUNTER", "MAGE",
+        "MONK", "PALADIN", "PRIEST", "ROGUE", "SHAMAN", "WARLOCK", "WARRIOR",
+    }
+    local currentClass = CLASS_LIST[1]
+
+    local listScroll = CreateFrame("ScrollFrame", nil, content, "UIPanelScrollFrameTemplate")
+    listScroll:SetPoint("TOPLEFT", classDD, "BOTTOMLEFT", 0, -8)
+    listScroll:SetSize(440, 200)
+    local listContent = CreateFrame("Frame", nil, listScroll)
+    listContent:SetSize(420, 1)
+    listScroll:SetScrollChild(listContent)
+
+    local listRows = {}
+    local function rebuildList()
+        for _, r in ipairs(listRows) do r:Hide() end
+        listRows = {}
+        local entries = (GBI.IterCooldowns and GBI.IterCooldowns()) or GBI.Cooldowns or {}
+        local matches = {}
+        for sid, cd in pairs(entries) do
+            if cd and cd.class == currentClass then
+                matches[#matches + 1] = { sid = sid, cd = cd }
+            end
+        end
+        table.sort(matches, function(a, b) return (a.cd.name or "") < (b.cd.name or "") end)
+        local y = 0
+        for _, m in ipairs(matches) do
+            local row = CreateFrame("Frame", nil, listContent)
+            row:SetSize(420, 22)
+            row:SetPoint("TOPLEFT", 0, -y)
+            local cb = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
+            cb:SetPoint("LEFT", 0, 0)
+            local sdb = db().spellDb or {}
+            local disabled = sdb.disabled and sdb.disabled[m.sid]
+            cb:SetChecked(not disabled)
+            cb:SetScript("OnClick", function(s)
+                db().spellDb = db().spellDb or { disabled = {}, custom = {} }
+                db().spellDb.disabled = db().spellDb.disabled or {}
+                db().spellDb.disabled[m.sid] = (not s:GetChecked()) and true or nil
+            end)
+            local lbl = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+            lbl:SetPoint("LEFT", cb, "RIGHT", 4, 0)
+            lbl:SetText(("%d  %s  (%ds, %s)"):format(m.sid, m.cd.name or "?",
+                m.cd.duration or 0, tostring(m.cd.category)))
+            -- Custom entries get a remove button
+            if (db().spellDb or {}).custom and db().spellDb.custom[m.sid] then
+                local rm = CreateFrame("Button", nil, row, "UIPanelCloseButton")
+                rm:SetSize(20, 20); rm:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+                rm:SetScript("OnClick", function()
+                    db().spellDb.custom[m.sid] = nil
+                    rebuildList()
+                end)
+            end
+            listRows[#listRows + 1] = row
+            y = y + 24
+        end
+        listContent:SetHeight(math.max(y, 1))
+    end
+
+    classDD:SetupMenu(function(_, root)
+        for _, c in ipairs(CLASS_LIST) do
+            root:CreateRadio(c, function() return currentClass == c end, function()
+                currentClass = c
+                rebuildList()
+                classDD:GenerateMenu()
+            end)
+        end
+    end)
+    classDD:SetScript("OnShow", function() classDD:GenerateMenu(); rebuildList() end)
+
+    -- Add custom spell row
+    local addLabel = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    addLabel:SetPoint("TOPLEFT", listScroll, "BOTTOMLEFT", 0, -10)
+    addLabel:SetText("Add custom (id  name  duration  cat: bigcd|defensive|interrupt|utility|dispel):")
+
+    local function mkInput(parent, prev, w, dx)
+        local e = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
+        e:SetSize(w, 20); e:SetAutoFocus(false); e:SetMaxLetters(40)
+        if prev then e:SetPoint("LEFT", prev, "RIGHT", dx or 8, 0)
+        else e:SetPoint("TOPLEFT", addLabel, "BOTTOMLEFT", 8, -8) end
+        return e
+    end
+    local addId   = mkInput(content, nil, 60); addId:SetNumeric(true)
+    local addName = mkInput(content, addId,  140)
+    local addDur  = mkInput(content, addName, 50); addDur:SetNumeric(true)
+    local addCat  = mkInput(content, addDur, 80)
+
+    local addBtn = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
+    addBtn:SetSize(90, 22)
+    addBtn:SetPoint("LEFT", addCat, "RIGHT", 8, 0)
+    addBtn:SetText("Add")
+    addBtn:SetScript("OnClick", function()
+        local sid = tonumber(addId:GetText())
+        local name = addName:GetText() or ""
+        local dur = tonumber(addDur:GetText())
+        local catRaw = (addCat:GetText() or ""):lower()
+        local catMap = {
+            bigcd = K.CAT_BIGCD, defensive = K.CAT_DEFENSIVE,
+            interrupt = K.CAT_INTERRUPT, utility = K.CAT_UTILITY,
+            dispel = K.CAT_DISPEL, offensive = K.CAT_OFFENSIVE,
+        }
+        local cat = catMap[catRaw]
+        if not (sid and sid > 0 and dur and dur > 0 and cat and #name > 0) then return end
+        db().spellDb = db().spellDb or { disabled = {}, custom = {} }
+        db().spellDb.custom = db().spellDb.custom or {}
+        db().spellDb.custom[sid] = {
+            name = name, duration = dur, class = currentClass, category = cat,
+        }
+        addId:SetText(""); addName:SetText(""); addDur:SetText(""); addCat:SetText("")
+        rebuildList()
+    end)
+
+    -- Grow content height to fit Spell DB section
+    content:SetHeight(1500)
+
     -- Register
     category = Settings.RegisterCanvasLayoutCategory(panel, "GOBIGnINTERRUPT")
     Settings.RegisterAddOnCategory(category)
