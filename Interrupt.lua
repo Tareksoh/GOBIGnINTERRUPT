@@ -146,11 +146,36 @@ end
 -- Schedule
 -- ---------------------------------------------------------------------------
 
+-- Probe UnitCastingInfo's notInterruptible. Returns true if the cast is
+-- explicitly NOT interruptible. Tagged-boolean safe.
+local function castIsNotInterruptible(unit)
+    local function fetch()
+        local _, _, _, _, _, _, _, _, _, notInt = UnitCastingInfo(unit)
+        return notInt
+    end
+    local ok, notInt = pcall(fetch)
+    if not ok then
+        ok, notInt = pcall(function()
+            local _, _, _, _, _, _, _, _, _, n2 = UnitChannelInfo(unit)
+            return n2
+        end)
+    end
+    if not ok or notInt == nil then return false end
+    return laundered_bool(notInt)
+end
+
 local function onStart_inner(unit, castGUID, eventSpellID)
     -- Same-cast multi-token dedup
     if (GetTime() - lastScheduleAt) < SAME_CAST_WINDOW then return end
     if not ensureCfg().enabled then return end
     if not isCandidateUnit(unit) then return end
+
+    -- Skip if Blizzard says this cast can't be interrupted (boss-only cast,
+    -- channel without interrupt flag, etc.). Tag-safe boolean check.
+    if castIsNotInterruptible(unit) then
+        log("Debug", "skip %s: cast not interruptible", unit)
+        return
+    end
 
     -- Player kick must be off CD; read Brain's clean state, not the API.
     local readyOK, ready = pcall(playerInterruptReady)

@@ -16,14 +16,26 @@ GBI.AuraMap.byNameClass = {}             -- name -> { CLASS_TOKEN -> cdSpellID }
 -- Built at addon load: index Data_Cooldowns by both spellID and name+class.
 -- The name index is the fallback for 12.0.5 remote-PC parties where aura.spellId
 -- comes back tagged-and-unlaunderable; aura.name is plain and reliable.
+local function registerName(name, classToken, cdID)
+    if type(name) ~= "string" or not classToken then return end
+    GBI.AuraMap.byNameClass[name] = GBI.AuraMap.byNameClass[name] or {}
+    GBI.AuraMap.byNameClass[name][classToken] = cdID
+end
+
 local function build()
     for cdID, entry in pairs(GBI.Cooldowns or {}) do
         if entry and entry.auraID then
             GBI.AuraMap.byAuraID[entry.auraID] = cdID
         end
-        if entry and entry.name and entry.class then
-            GBI.AuraMap.byNameClass[entry.name] = GBI.AuraMap.byNameClass[entry.name] or {}
-            GBI.AuraMap.byNameClass[entry.name][entry.class] = cdID
+        if entry and entry.class then
+            registerName(entry.name, entry.class, cdID)
+            -- Optional alias list for spells whose buff name differs from
+            -- the cast name. e.g. entry.auraAliases = { "Cooled Down", ... }
+            if type(entry.auraAliases) == "table" then
+                for _, alias in ipairs(entry.auraAliases) do
+                    registerName(alias, entry.class, cdID)
+                end
+            end
         end
     end
 end

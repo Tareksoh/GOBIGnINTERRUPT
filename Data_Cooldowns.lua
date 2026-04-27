@@ -48,7 +48,7 @@ GBI.Cooldowns = {
 [231895] = { name = "Crusade",             duration = 120, class = "PALADIN",    category = K.CAT_BIGCD, spec = {3} },
 [255937] = { name = "Wake of Ashes",       duration = 30, class = "PALADIN",     category = K.CAT_BIGCD, spec = {3} },
 [288613] = { name = "Trueshot",            duration = 120, class = "HUNTER",     category = K.CAT_BIGCD, spec = {2} },
-[19574]  = { name = "Bestial Wrath",       duration = 30, class = "HUNTER",      category = K.CAT_BIGCD, spec = {1} },  -- 12.0.5 BM redesign: static 30s (ORB's 90 is stale)
+[19574]  = { name = "Bestial Wrath",       duration = 30, class = "HUNTER",      category = K.CAT_BIGCD, spec = {1}, auraAliases = { "Aspect of the Wild" } },  -- 12.0.5 BM redesign: static 30s (ORB's 90 is stale)
 [360952] = { name = "Coordinated Assault", duration = 120, class = "HUNTER",     category = K.CAT_BIGCD, spec = {3} },
 [121471] = { name = "Shadow Blades",       duration = 90, class = "ROGUE",       category = K.CAT_BIGCD, spec = {3} },  -- MiniCC (talented)
 [13750]  = { name = "Adrenaline Rush",     duration = 180, class = "ROGUE",      category = K.CAT_BIGCD, spec = {2} },
