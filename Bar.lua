@@ -338,6 +338,21 @@ local function newBar(spec)
         if not row then return end
         local list = self.icons[unit] or {}
         self.icons[unit] = list
+
+        -- Build expected spell-ID set for this unit's class+spec.
+        local expected = {}
+        for _, e in ipairs(GBI.SpellsForUnit(unit)) do expected[e.sid] = true end
+
+        -- Prune placeholder entries no longer in the expected set (spec changed
+        -- or initial permissive list got pruned once inspect resolved).
+        for i = #list, 1, -1 do
+            local x = list[i]
+            if x.placeholder and not expected[x.spellID] then
+                x.icon:Hide()
+                table.remove(list, i)
+            end
+        end
+
         for _, e in ipairs(GBI.SpellsForUnit(unit)) do
             local cd = e.cd
             local include = (spec.progressBar and cd.category == K.CAT_INTERRUPT)

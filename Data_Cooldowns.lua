@@ -197,9 +197,14 @@ function GBI.SpellsForUnit(unit)
     if not unit or not UnitExists(unit) then return out end
     local _, classToken = UnitClass(unit)
     if not classToken then return out end
-    local guid = GBI.Taint and GBI.Taint.SafeGUID and GBI.Taint.SafeGUID(unit)
-    local spec = guid and GBI.Inspect and GBI.Inspect.GetSpecByGUID
-        and GBI.Inspect.GetSpecByGUID(guid) or nil
+    local spec
+    if unit == "player" then
+        spec = GetSpecialization and GetSpecialization() or nil
+    else
+        local guid = GBI.Taint and GBI.Taint.SafeGUID and GBI.Taint.SafeGUID(unit)
+        spec = guid and GBI.Inspect and GBI.Inspect.GetSpecByGUID
+            and GBI.Inspect.GetSpecByGUID(guid) or nil
+    end
     local entries = GBI.IterCooldowns and GBI.IterCooldowns() or GBI.Cooldowns or {}
     for sid, cd in pairs(entries) do
         if cd and cd.class == classToken then

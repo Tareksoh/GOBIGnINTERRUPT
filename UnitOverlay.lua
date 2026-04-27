@@ -207,6 +207,16 @@ function M.PopulatePlaceholders(unit)
     if not GBI.SpellsForUnit then return end
     local c = ensureContainer(unit)
     if not c then return end
+
+    -- Prune placeholders that no longer match the unit's class+spec.
+    local expected = {}
+    for _, e in ipairs(GBI.SpellsForUnit(unit)) do expected[e.sid] = true end
+    for _, x in ipairs(c.icons) do
+        if x.placeholder and x.spellID and not expected[x.spellID] then
+            x.icon:Hide()
+        end
+    end
+
     for _, e in ipairs(GBI.SpellsForUnit(unit)) do
         local cd = e.cd
         if cd.category ~= K.CAT_INTERRUPT
