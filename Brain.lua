@@ -154,6 +154,12 @@ function M.OnCast(unit, spellID, cdEntry)
         GBI.Bar.OnCDStart(unit, spellID, state[unit][spellID])
     end
 
+    -- Peer-share: broadcast our own casts so other PCs (where party
+    -- UNIT_SPELLCAST is redacted) can show our CDs anyway.
+    if unit == "player" and GBI.CDComm and GBI.CDComm.Broadcast then
+        GBI.CDComm.Broadcast(spellID, cdEntry.duration or 30)
+    end
+
     -- schedule the end-of-cooldown event
     local duration = cdEntry.duration or 30
     local sid      = spellID

@@ -31,6 +31,7 @@ local DEFAULTS = {
     burst           = { mode = "auto" },   -- burst-ready trigger source:
                                             -- auto | manual | both (see Brain.lua)
     spellDb         = { disabled = {}, custom = {} },  -- user overrides
+    comm            = { enabled = true },              -- peer CD-sharing broadcast
 }
 
 local SCHEMA_VERSION = 4

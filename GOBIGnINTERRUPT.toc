@@ -33,6 +33,7 @@ UnitOverlay.lua
 KickCounter.lua
 MinimapIcon.lua
 SoundPipeline.lua
+CDComm.lua
 
 # Entry
 GOBIGnINTERRUPT.lua
