@@ -432,6 +432,28 @@ local function buildPanel()
                 db().bars[key].barWidth = v
                 if GBI.Bar and GBI.Bar.ApplyAllBars then GBI.Bar.ApplyAllBars() end
             end)
+
+            -- Grow direction (also applies to progress bar fill direction)
+            local gdLbl = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+            gdLbl:SetPoint("LEFT", bw, "RIGHT", 32, 0)
+            gdLbl:SetText("Grow")
+            local gd = CreateFrame("DropdownButton", nil, parent, "WowStyle1DropdownTemplate")
+            gd:SetPoint("LEFT", gdLbl, "RIGHT", 6, 0); gd:SetWidth(110)
+            local function curGrow()
+                local sv = (db().bars or {})[key] or {}
+                return sv.growDir or "RIGHT"
+            end
+            gd:SetupMenu(function(_, root)
+                for _, dir in ipairs({ "RIGHT", "LEFT" }) do
+                    root:CreateRadio(dir, function() return curGrow() == dir end, function()
+                        db().bars = db().bars or {}; db().bars[key] = db().bars[key] or {}
+                        db().bars[key].growDir = dir
+                        if GBI.Bar and GBI.Bar.ApplyAllBars then GBI.Bar.ApplyAllBars() end
+                        gd:GenerateMenu()
+                    end)
+                end
+            end)
+            gd:SetScript("OnShow", function() gd:GenerateMenu() end)
             lastSlider = bw
         else
             -- Icons per row

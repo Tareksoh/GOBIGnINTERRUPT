@@ -374,10 +374,14 @@ local function newBar(spec)
             end
         end
         if spec.progressBar then
+            local growLeft = effGrowDir() == "LEFT"
             for _, row in pairs(self.rows) do
-                if row.progBar then row.progBar:SetHeight(effIcon() + 4) end
+                if row.progBar then
+                    row.progBar:SetHeight(effIcon() + 4)
+                    row.progBar:SetReverseFill(growLeft)
+                end
             end
-            return  -- bar OnUpdate handles icon positions
+            return  -- bar OnUpdate handles icon positions per-frame
         end
         -- relayout visible icons in each row (with wrap + grow direction)
         for unit, list in pairs(self.icons) do
