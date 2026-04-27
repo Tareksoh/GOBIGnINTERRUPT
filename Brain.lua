@@ -244,6 +244,26 @@ function M.GetState(unit, spellID)
     return state[unit][spellID]
 end
 
+-- Stacks for stack-resource spells. We synthesize a state entry so the
+-- Bar/Overlay can render the icon (with a stack count overlay) even though
+-- there's no traditional cooldown. endsAt is intentionally far in the
+-- future so the icon stays visible; it un-fades to "ready" when the
+-- threshold is reached.
+function M.SetStacks(unit, spellID, count, threshold)
+    threshold = threshold or 1
+    local cd = GBI.GetCooldown and GBI.GetCooldown(spellID)
+    if not cd then return end
+    state[unit] = state[unit] or {}
+    local s = state[unit][spellID] or {
+        startedAt = GetTime(), endsAt = GetTime() + 9999, cdEntry = cd,
+    }
+    s.stackCount     = count
+    s.stackThreshold = threshold
+    s.cdEntry        = cd
+    state[unit][spellID] = s
+    if GBI.Bar and GBI.Bar.OnCDStart then GBI.Bar.OnCDStart(unit, spellID, s) end
+end
+
 -- Inbound delta from a peer ("their CD now has X seconds left"). Adjusts
 -- the existing entry's endsAt so the bar/overlay reflect the shorter time.
 -- If we don't have an entry for this spell yet, ignore (the U should

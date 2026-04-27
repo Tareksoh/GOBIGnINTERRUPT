@@ -84,6 +84,17 @@ function M.BroadcastDelta(spellID, remaining)
     return send(("D;%d;%.1f"):format(spellID, remaining))
 end
 
+-- Stack count for stack-resource spells (Devourer Void Meta etc.).
+-- K stands for "Kount". Throttled by caller.
+local lastStackBroadcast = {}
+function M.BroadcastStacks(spellID, count)
+    if type(spellID) ~= "number" or type(count) ~= "number" then return end
+    if lastStackBroadcast[spellID] == count then return end       -- no change
+    lastStackBroadcast[spellID] = count
+    log("Debug", "send K;%d;%d", spellID, count)
+    return send(("K;%d;%d"):format(spellID, count))
+end
+
 local f = CreateFrame("Frame", "GOBIGnINTERRUPT_CommFrame")
 f:RegisterEvent("PLAYER_LOGIN")
 f:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -160,6 +171,15 @@ f:SetScript("OnEvent", function(_, event, prefix, msg, channel, sender)
         log("Debug", "recv D %s -> %s spell=%d rem=%.1f", sender, unit, sid, rem)
         if GBI.Brain and GBI.Brain.UpdateRemaining then
             GBI.Brain.UpdateRemaining(unit, sid, rem)
+        end
+    elseif mt == "K" then
+        local sid = tonumber(parts[2]); local n = tonumber(parts[3])
+        if not sid or not n then return end
+        log("Debug", "recv K %s -> %s spell=%d stacks=%d", sender, unit, sid, n)
+        local cd = GBI.GetCooldown and GBI.GetCooldown(sid)
+        local thr = cd and cd.stackingResource and cd.stackingResource.threshold or 1
+        if GBI.Brain and GBI.Brain.SetStacks then
+            GBI.Brain.SetStacks(unit, sid, n, thr)
         end
     elseif mt == "T" then
         local idsStr = parts[2] or ""

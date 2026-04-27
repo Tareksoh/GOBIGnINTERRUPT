@@ -588,16 +588,21 @@ local function newBar(spec)
         local iconPath = info and info.iconID or "Interface\\Icons\\INV_Misc_QuestionMark"
         entry.icon.tex:SetTexture(iconPath)
         entry.cooldown:SetCooldown(state.startedAt, state.endsAt - state.startedAt)
-        -- Charge count overlay (top-right). Created lazily; shown only when
-        -- the entry has a meaningful charge count (max > 1).
-        local ch    = state.charges
-        local chMax = state.chargesMax
-        if ch and chMax and chMax > 1 then
+        -- Charge / stack count overlay (bottom-right). Stacks (e.g. Devourer
+        -- Meta resource toward 50) take priority over charges since stack
+        -- spells don't usually also have charges.
+        local n, total
+        if state.stackCount then
+            n, total = state.stackCount, state.stackThreshold
+        elseif state.charges and state.chargesMax and state.chargesMax > 1 then
+            n, total = state.charges, state.chargesMax
+        end
+        if n and total then
             if not entry.chargeText then
                 entry.chargeText = entry.icon:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
                 entry.chargeText:SetPoint("BOTTOMRIGHT", entry.icon, "BOTTOMRIGHT", -1, 1)
             end
-            entry.chargeText:SetText(tostring(ch))
+            entry.chargeText:SetText(("%d/%d"):format(n, total))
             entry.chargeText:Show()
         elseif entry.chargeText then
             entry.chargeText:Hide()

@@ -35,6 +35,7 @@ MinimapIcon.lua
 SoundPipeline.lua
 CDComm.lua
 TalentSync.lua
+StackTracker.lua
 
 # Entry
 GOBIGnINTERRUPT.lua
