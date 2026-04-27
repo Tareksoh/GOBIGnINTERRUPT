@@ -27,33 +27,47 @@ local f = CreateFrame("Frame", "GOBIGnINTERRUPT_EvidenceFrame")
 f:RegisterUnitEvent("UNIT_AURA",
     "player", "party1", "party2", "party3", "party4")
 
+local function fire(unit, spellID, cd)
+    local existing = GBI.Brain and GBI.Brain.GetState
+        and GBI.Brain.GetState(unit, spellID)
+    if existing and existing.endsAt and existing.endsAt > GetTime() + 1 then
+        return  -- already tracked as live
+    end
+    log("Debug", "evidence aura %d (%s) on %s", spellID, cd.name, unit)
+    if GBI.Brain and GBI.Brain.OnCast then
+        GBI.Brain.OnCast(unit, spellID, cd)
+    end
+end
+
 f:SetScript("OnEvent", function(_, event, unit, updateInfo)
     if event ~= "UNIT_AURA" then return end
     if not K.PARTY_UNITS_SET[unit] then return end
     if not updateInfo or updateInfo.isFullUpdate or not updateInfo.addedAuras then return end
 
     local _, classToken = UnitClass(unit)
+    log("Debug", "UNIT_AURA unit=%s addedAuras=%d", unit, #updateInfo.addedAuras)
 
     for _, aura in ipairs(updateInfo.addedAuras) do
-        -- Midnight: any field access on a private aura throws. pcall.
-        local ok, rawId = pcall(function() return aura.spellId end)
-        if ok and rawId then
-            local spellID = GBI.Taint.SafeSpellID(rawId)
-            if spellID then
-                local cd = GBI.GetCooldown(spellID)
-                if cd and (not cd.class or cd.class == classToken) then
-                    -- Skip if Brain already has fresh state (avoids re-fire on
-                    -- buff refresh / pet aura churn).
-                    local existing = GBI.Brain and GBI.Brain.GetState
-                        and GBI.Brain.GetState(unit, spellID)
-                    if existing and existing.endsAt and existing.endsAt > GetTime() + 1 then
-                        -- already tracking this CD as live; skip
-                    else
-                        log("Debug", "evidence aura %d (%s) on %s", spellID, cd.name, unit)
-                        if GBI.Brain and GBI.Brain.OnCast then
-                            GBI.Brain.OnCast(unit, spellID, cd)
-                        end
+        -- Path 1: spellId. May be secret-tagged on remote-PC party members.
+        local okId, rawId = pcall(function() return aura.spellId end)
+        local spellID = okId and rawId and GBI.Taint.SafeSpellID(rawId) or nil
+        local cd = spellID and GBI.GetCooldown(spellID)
+        if cd and (not cd.class or cd.class == classToken) then
+            fire(unit, spellID, cd)
+        else
+            -- Path 2: spell name. Names aren't tagged. Match against AuraMap.
+            local okN, rawName = pcall(function() return aura.name end)
+            if okN and type(rawName) == "string" then
+                local sidByName = GBI.AuraMap and GBI.AuraMap.LookupByName
+                    and GBI.AuraMap.LookupByName(rawName, classToken)
+                if sidByName then
+                    local cdN = GBI.GetCooldown(sidByName)
+                    if cdN then
+                        log("Debug", "  evidence-by-name '%s' -> %d", rawName, sidByName)
+                        fire(unit, sidByName, cdN)
                     end
+                else
+                    log("Debug", "  aura '%s' on %s -> no DB match", rawName, unit)
                 end
             end
         end
