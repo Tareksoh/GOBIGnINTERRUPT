@@ -36,10 +36,15 @@ end
 -- Returns cdSpellID or nil. classToken can be nil — we'll try every class match.
 function GBI.AuraMap.LookupByName(name, classToken)
     if type(name) ~= "string" then return nil end
-    local byClass = GBI.AuraMap.byNameClass[name]
-    if not byClass then return nil end
-    if classToken and byClass[classToken] then return byClass[classToken] end
-    -- generic match (e.g. abilities not class-locked)
+    -- name itself can be a secret-tagged string in 12.0.5 (aura.name on
+    -- remote-PC party auras). Pcall the table indexing so a tagged key
+    -- just misses cleanly instead of throwing.
+    local ok, byClass = pcall(function() return GBI.AuraMap.byNameClass[name] end)
+    if not ok or not byClass then return nil end
+    if classToken then
+        local ok2, sid = pcall(function() return byClass[classToken] end)
+        if ok2 and sid then return sid end
+    end
     for _, sid in pairs(byClass) do return sid end
     return nil
 end

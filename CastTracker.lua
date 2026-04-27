@@ -74,8 +74,10 @@ f:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
                         fromGUID, tostring(rawSpellID))
                     spellID = fromGUID
                 else
-                    log("Debug", "  match failed: ok=%s m=%s clean=%s",
-                        tostring(okM), tostring(m), tostring(cleanGUID):sub(1,40))
+                    -- Don't index the GUID string for logging; it may also
+                    -- be tagged. Just note that match failed.
+                    log("Debug", "  match failed: ok=%s m=%s",
+                        tostring(okM), tostring(m))
                 end
             end
         end
