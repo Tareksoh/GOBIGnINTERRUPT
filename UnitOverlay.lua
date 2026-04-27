@@ -400,16 +400,11 @@ tk:SetScript("OnUpdate", function(self, elapsed)
     local now = GetTime()
     for _, c in pairs(containers) do
         for _, e in ipairs(c.icons) do
-            if e.icon:IsShown() and e.endsAt and e.endsAt <= now then
-                -- Keep icon visible, glow to indicate spell is ready.
-                if not e.glowing and _G.ActionButton_ShowOverlayGlow then
-                    pcall(_G.ActionButton_ShowOverlayGlow, e.icon)
-                    e.glowing = true
-                end
-            elseif e.glowing and e.endsAt and e.endsAt > now then
-                if _G.ActionButton_HideOverlayGlow then
-                    pcall(_G.ActionButton_HideOverlayGlow, e.icon)
-                end
+            -- Once observed, icons stay bright + visible. No glow on ready,
+            -- no re-dim — only placeholders are dim (alpha 0.4 + desaturated)
+            -- and they un-dim permanently on first OnCDStart.
+            if e.glowing and _G.ActionButton_HideOverlayGlow then
+                pcall(_G.ActionButton_HideOverlayGlow, e.icon)
                 e.glowing = false
             end
         end

@@ -416,15 +416,11 @@ local function newBar(spec)
         for _, units in pairs(self.icons) do
             for _, entry in ipairs(units) do
                 local expired = entry.endsAt and entry.endsAt <= now
-                if expired and spec.progressBar then
-                    -- Interrupts bar: once observed, icon stays bright (no
-                    -- glow, no dim — just a clean ready-state icon parked
-                    -- at the bar's frac=0 end). Dim placeholder look is
-                    -- only for spells that have NEVER been observed yet.
+                if expired then
+                    -- Once observed, icon stays bright forever for the run
+                    -- (no glow, no dim). Dim placeholder is only for spells
+                    -- that have never been observed yet.
                     if entry.glowing then hideGlow(entry.icon); entry.glowing = false end
-                elseif expired then
-                    -- Cooldown bar: glow when ready (existing behaviour).
-                    if not entry.glowing then showGlow(entry.icon); entry.glowing = true end
                 elseif glowOn and entry.endsAt and (entry.endsAt - now) <= GLOW_LEAD_S then
                     if not entry.glowing then showGlow(entry.icon); entry.glowing = true end
                 elseif entry.glowing and not glowOn then
