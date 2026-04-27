@@ -75,6 +75,15 @@ function M.BroadcastInterrupt()
     return send("I")
 end
 
+-- "Cooldown delta" — used when a CD's remaining time shrinks mid-flight
+-- (e.g. Devourer DH Metamorphosis reduced by ability usage). spellID +
+-- the new remaining seconds.
+function M.BroadcastDelta(spellID, remaining)
+    if type(spellID) ~= "number" or type(remaining) ~= "number" then return end
+    log("Debug", "send D;%d;%.1f", spellID, remaining)
+    return send(("D;%d;%.1f"):format(spellID, remaining))
+end
+
 local f = CreateFrame("Frame", "GOBIGnINTERRUPT_CommFrame")
 f:RegisterEvent("PLAYER_LOGIN")
 f:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -144,6 +153,13 @@ f:SetScript("OnEvent", function(_, event, prefix, msg, channel, sender)
         log("Debug", "recv I %s -> %s (interrupt)", sender, unit)
         if GBI.KickCounter and GBI.KickCounter.AttributePeer then
             GBI.KickCounter.AttributePeer(unit)
+        end
+    elseif mt == "D" then
+        local sid = tonumber(parts[2]); local rem = tonumber(parts[3])
+        if not sid or not rem then return end
+        log("Debug", "recv D %s -> %s spell=%d rem=%.1f", sender, unit, sid, rem)
+        if GBI.Brain and GBI.Brain.UpdateRemaining then
+            GBI.Brain.UpdateRemaining(unit, sid, rem)
         end
     elseif mt == "T" then
         local idsStr = parts[2] or ""

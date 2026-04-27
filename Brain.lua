@@ -244,6 +244,59 @@ function M.GetState(unit, spellID)
     return state[unit][spellID]
 end
 
+-- Inbound delta from a peer ("their CD now has X seconds left"). Adjusts
+-- the existing entry's endsAt so the bar/overlay reflect the shorter time.
+-- If we don't have an entry for this spell yet, ignore (the U should
+-- arrive separately).
+function M.UpdateRemaining(unit, spellID, remaining)
+    if type(remaining) ~= "number" or remaining < 0 then return end
+    local s = state[unit] and state[unit][spellID]
+    if not s then return end
+    local newEnds = GetTime() + remaining
+    if math.abs(newEnds - s.endsAt) < 0.5 then return end   -- ignore noise
+    s.endsAt = newEnds
+    log("Debug", "delta unit=%s spell=%d remaining=%.1fs", unit, spellID, remaining)
+    if GBI.Bar and GBI.Bar.OnCDStart then
+        GBI.Bar.OnCDStart(unit, spellID, s)   -- re-render with new endsAt
+    end
+end
+
+-- Local-player polling: when SPELL_UPDATE_COOLDOWN fires, scan our active
+-- tracked CDs. If the engine reports a shorter remaining than we expect
+-- (dynamic CDR like Devourer Meta), broadcast a D delta to peers and
+-- update our own state.
+local lastDeltaAt = {}              -- spellID -> last broadcast time
+local DELTA_THROTTLE = 1.0          -- one D message per spell per second max
+
+local function pollPlayerDynamic()
+    if not (state.player and C_Spell and C_Spell.GetSpellCooldown) then return end
+    local now = GetTime()
+    for sid, s in pairs(state.player) do
+        if s.endsAt > now then
+            local ok, info = pcall(C_Spell.GetSpellCooldown, sid)
+            if ok and type(info) == "table" and info.startTime and info.duration
+               and info.duration > 0 then
+                local realEnds = info.startTime + info.duration
+                if realEnds < s.endsAt - 1 then
+                    s.endsAt = realEnds
+                    if GBI.Bar and GBI.Bar.OnCDStart then
+                        GBI.Bar.OnCDStart("player", sid, s)
+                    end
+                    if (now - (lastDeltaAt[sid] or 0)) >= DELTA_THROTTLE
+                       and GBI.CDComm and GBI.CDComm.BroadcastDelta then
+                        GBI.CDComm.BroadcastDelta(sid, math.max(0, realEnds - now))
+                        lastDeltaAt[sid] = now
+                    end
+                end
+            end
+        end
+    end
+end
+
+local pollFrame = CreateFrame("Frame", "GOBIGnINTERRUPT_DeltaPoll")
+pollFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
+pollFrame:SetScript("OnEvent", function() pcall(pollPlayerDynamic) end)
+
 function M.IterUnitState(unit) return pairs(state[unit] or {}) end
 
 function M.Reset()
