@@ -1,9 +1,5 @@
 package-as: GOBIGnINTERRUPT
 
-# Don't pull external libraries — we ship none.
-externals: {}
-
-# Files/dirs to leave OUT of the packaged zip.
 ignore:
   - .git
   - .github
@@ -11,12 +7,5 @@ ignore:
   - .pkgmeta
   - README.md
   - LICENSE
+  - CHANGELOG.md
   - "*.zip"
-
-manual-changelog:
-  filename: CHANGELOG.md
-  markup-type: markdown
-
-# Optional: replace tokens in source on package.
-# CurseForge will inject the actual project id at build time.
-license-output: LICENSE.txt
