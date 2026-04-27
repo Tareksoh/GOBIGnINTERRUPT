@@ -20,6 +20,25 @@ local GBI = GOBIGnINTERRUPT
 GBI.Taint = GBI.Taint or {}
 local T = GBI.Taint
 
+-- WoW exposes `issecretvalue` globally in 12.0.5+ — the proper way to
+-- detect a tagged value before using it. Used by OmniReborn, InterruptTrack,
+-- and Kicker. Falls back to a pcall'd index probe if not present.
+local _issecret = _G.issecretvalue
+
+local function isSecret(v)
+    if v == nil then return false end
+    if _issecret then
+        local ok, r = pcall(_issecret, v)
+        return ok and r and true or false
+    end
+    -- Fallback: try to use v as a key in a fresh empty table. If it throws,
+    -- assume tagged.
+    local probe = {}
+    local ok = pcall(function() probe[v] = 1 end)
+    return not ok
+end
+T.IsSecret = isSecret
+
 -- Helpers ------------------------------------------------------------------
 
 local function laundered(rawNum)
@@ -49,12 +68,19 @@ function T.SafeNumber(raw)
 end
 
 function T.SafeSpellID(raw)
+    if raw == nil or isSecret(raw) then return nil end
     local n = laundered(raw)
-    if not n then return nil end
-    -- Comparison on a tainted number can throw; pcall the >0 check.
-    local ok, gt = pcall(function() return n > 0 end)
-    if ok and gt then return n end
-    return nil
+    if type(n) ~= "number" or n <= 0 then return nil end
+    return n
+end
+
+-- Take any value and return it only if it's a non-secret string. Otherwise nil.
+-- Use before passing user-supplied or event-payload strings to table keys
+-- or string functions.
+function T.SafeString2(raw)
+    if type(raw) ~= "string" then return nil end
+    if isSecret(raw) then return nil end
+    return raw
 end
 
 function T.SafeString(raw)
