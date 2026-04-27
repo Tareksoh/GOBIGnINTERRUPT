@@ -257,14 +257,25 @@ end
 -- there's no traditional cooldown. endsAt is intentionally far in the
 -- future so the icon stays visible; it un-fades to "ready" when the
 -- threshold is reached.
+-- Brief activation flash for stack-resource spells. Triggers a 2s extra
+-- glow on the icon by re-stamping the existing state. Called when the
+-- player or a peer actually casts the spell.
+function M.FlashCast(unit, spellID)
+    local s = state[unit] and state[unit][spellID]
+    if not s then return end
+    s.flashUntil = GetTime() + 2
+    if GBI.Bar and GBI.Bar.OnCDStart then GBI.Bar.OnCDStart(unit, spellID, s) end
+end
+
 function M.SetStacks(unit, spellID, count, threshold)
     threshold = threshold or 1
     local cd = GBI.GetCooldown and GBI.GetCooldown(spellID)
     if not cd then return end
     state[unit] = state[unit] or {}
-    local s = state[unit][spellID] or {
-        startedAt = GetTime(), endsAt = GetTime() + 9999, cdEntry = cd,
-    }
+    local s = state[unit][spellID] or { startedAt = GetTime(), cdEntry = cd }
+    -- Stack-resource spells don't have a CD - leave endsAt nil so the
+    -- icon's CooldownFrameTemplate shows no swipe.
+    s.endsAt         = nil
     s.stackCount     = count
     s.stackThreshold = threshold
     s.cdEntry        = cd

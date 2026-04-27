@@ -282,7 +282,18 @@ function M.OnCDStart(unit, spellID, state)
         entry.icon:SetAlpha(1.0)
         entry.icon.tex:SetDesaturated(false)
     end
-    entry.cooldown:SetCooldown(state.startedAt, state.endsAt - state.startedAt)
+    if state.stackCount ~= nil then
+        entry.cooldown:SetCooldown(0, 0)
+        if state.stackCount >= (state.stackThreshold or 1) then
+            if _G.ActionButton_ShowOverlayGlow and not entry.glowing then
+                pcall(_G.ActionButton_ShowOverlayGlow, entry.icon); entry.glowing = true
+            end
+        elseif entry.glowing and _G.ActionButton_HideOverlayGlow then
+            pcall(_G.ActionButton_HideOverlayGlow, entry.icon); entry.glowing = false
+        end
+    else
+        entry.cooldown:SetCooldown(state.startedAt, state.endsAt - state.startedAt)
+    end
     -- Stack/charge overlay (stacks take priority over charges).
     local n, total
     if state.stackCount then

@@ -116,6 +116,15 @@ f:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
     log("Debug", "cast spell=%d unit=%s class=%s cat=%s",
         spellID, unit, tostring(classToken), tostring(cd.category))
 
+    -- Stack-resource spells don't have a CD; StackTracker handles their
+    -- display via Brain.SetStacks. The cast itself triggers a brief glow
+    -- flash to acknowledge the activation.
+    if cd.stackingResource then
+        if GBI.Brain and GBI.Brain.FlashCast then
+            GBI.Brain.FlashCast(unit, spellID)
+        end
+        return
+    end
     if GBI.Brain and GBI.Brain.OnCast then
         GBI.Brain.OnCast(unit, spellID, cd)
     end

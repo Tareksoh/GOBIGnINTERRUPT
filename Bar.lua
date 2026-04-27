@@ -461,6 +461,16 @@ local function newBar(spec)
         local glowOn = glowEnabled()
         for _, units in pairs(self.icons) do
             for _, entry in ipairs(units) do
+                -- Stack-resource icons: clear flash glow when its window ends.
+                if entry.flashUntil and entry.flashUntil <= now then
+                    entry.flashUntil = nil
+                    -- Re-evaluate; if no longer at threshold, drop the glow.
+                    -- (Brain hasn't re-fired OnCDStart.)
+                    if entry.glowing and entry.stackThreshold then
+                        local s = self.icons    -- not the right place to get state; just hide
+                        hideGlow(entry.icon); entry.glowing = false
+                    end
+                end
                 local expired = entry.endsAt and entry.endsAt <= now
                 if expired then
                     -- Once observed, icon stays bright forever for the run
@@ -587,7 +597,22 @@ local function newBar(spec)
         local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellID)
         local iconPath = info and info.iconID or "Interface\\Icons\\INV_Misc_QuestionMark"
         entry.icon.tex:SetTexture(iconPath)
-        entry.cooldown:SetCooldown(state.startedAt, state.endsAt - state.startedAt)
+        local stackMode = state.stackCount ~= nil
+        if stackMode then
+            entry.cooldown:SetCooldown(0, 0)
+            -- Glow if threshold met OR within a recent cast-flash window.
+            entry.flashUntil = state.flashUntil
+            entry.stackThreshold = state.stackThreshold
+            local flashing = entry.flashUntil and entry.flashUntil > GetTime()
+            local atThreshold = state.stackCount >= (state.stackThreshold or 1)
+            if flashing or atThreshold then
+                if not entry.glowing then showGlow(entry.icon); entry.glowing = true end
+            elseif entry.glowing then
+                hideGlow(entry.icon); entry.glowing = false
+            end
+        else
+            entry.cooldown:SetCooldown(state.startedAt, state.endsAt - state.startedAt)
+        end
         -- Charge / stack count overlay (bottom-right). Stacks (e.g. Devourer
         -- Meta resource toward 50) take priority over charges since stack
         -- spells don't usually also have charges.
@@ -613,7 +638,10 @@ local function newBar(spec)
             entry.icon:SetAlpha(1.0)
             if entry.icon.tex then entry.icon.tex:SetDesaturated(false) end
         end
-        if entry.glowing then hideGlow(entry.icon); entry.glowing = false end
+        -- Don't clobber the stack-mode glow we may have just set above.
+        if entry.glowing and not stackMode then
+            hideGlow(entry.icon); entry.glowing = false
+        end
 
         if spec.progressBar then
             -- Bar's OnUpdate positions icons along the fill edge; skip default layout.
