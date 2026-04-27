@@ -429,8 +429,8 @@ local function newBar(spec)
                     icon.tex = t
                     local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(e.sid)
                     t:SetTexture(info and info.iconID or "Interface\\Icons\\INV_Misc_QuestionMark")
-                    t:SetDesaturated(true)
-                    icon:SetAlpha(0.4)
+                    -- User preference: placeholders render at full color/alpha,
+                    -- same as live icons. Removed dim/desaturate.
                     local cooldown = CreateFrame("Cooldown", nil, icon, "CooldownFrameTemplate")
                     cooldown:SetAllPoints(icon)
                     icon.cooldown = cooldown

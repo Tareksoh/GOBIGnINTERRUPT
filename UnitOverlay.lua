@@ -242,8 +242,7 @@ function M.PopulatePlaceholders(unit)
                     entry.placeholder = true
                     local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(e.sid)
                     entry.icon.tex:SetTexture(info and info.iconID or "Interface\\Icons\\INV_Misc_QuestionMark")
-                    entry.icon.tex:SetDesaturated(true)
-                    entry.icon:SetAlpha(0.4)
+                    -- Placeholders render normal (no dim/desaturate).
                     entry.icon:Show()
                 end
             end
