@@ -104,21 +104,68 @@ local f = CreateFrame("Frame", "GOBIGnINTERRUPT_KickCounterFrame")
 -- RegisterUnitEvent restricts to the named friendly units (no hostile taint).
 -- Single call covers all unit tokens (up to 8 supported).
 f:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED",
-    "player", "party1", "party2", "party3", "party4")
+    "player", "party1", "party2", "party3", "party4",
+    "partypet1", "partypet2", "partypet3", "partypet4")
+-- UNIT_SPELLCAST_INTERRUPTED is unrestricted (fires on whatever the engine
+-- delivers). We filter to enemy units inside the handler.
+f:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED")
 f:RegisterEvent("CHALLENGE_MODE_START")
 f:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 f:RegisterEvent("PLAYER_ENTERING_WORLD")
 f:RegisterEvent("GROUP_ROSTER_UPDATE")
 
+-- ---------------------------------------------------------------------------
+-- Kicker-style cross-attribution: when an enemy cast is interrupted we don't
+-- get the source spellID reliably (12.0.5 redaction), but we DO get the unit
+-- token of any party member that fired UNIT_SPELLCAST_SUCCEEDED moments
+-- before. Inspired by /Kicker/Modules/Interrupt.lua.
+-- ---------------------------------------------------------------------------
+local recentPartyCasts = {}      -- [unit] = lastSeenAt
+local KICK_ATTRIB_WINDOW = 0.5
+
+local function recordRecentCast(unit)
+    local owner = unit
+    if type(unit) == "string" and unit:find("^partypet(%d)$") then
+        owner = unit:gsub("partypet", "party")
+    end
+    if owner == "player" or (type(owner) == "string" and owner:match("^party[1-4]$")) then
+        recentPartyCasts[owner] = GetTime()
+    end
+end
+
+local function attributeInterrupt()
+    local now = GetTime()
+    local bestUnit, bestTime = nil, -1
+    for u, t in pairs(recentPartyCasts) do
+        if (now - t) <= KICK_ATTRIB_WINDOW and t > bestTime then
+            bestUnit, bestTime = u, t
+        end
+    end
+    if not bestUnit then return end
+    local name = UnitName(bestUnit)
+    if not name then return end
+    counts[name] = (counts[name] or 0) + 1
+    log("Debug", "kick++ %s (attributed via %s) total=%d", name, bestUnit, counts[name])
+    refresh()
+    recentPartyCasts[bestUnit] = nil
+end
+
 f:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
     if event == "UNIT_SPELLCAST_SUCCEEDED" then
         local unit = arg1
-        if unit ~= "player" and not (type(unit) == "string" and unit:match("^party[1-4]$")) then return end
-        -- arg3 (spellID) is secret-tagged on remote-PC party members in 12.0.5;
-        -- launder via Taint.SafeSpellID before any table-key indexing.
+        if unit ~= "player" and not (type(unit) == "string"
+            and (unit:match("^party[1-4]$") or unit:match("^partypet[1-4]$"))) then return end
+        recordRecentCast(unit)
+        -- Spell-ID path (works on same-PC parties + own casts; degrades
+        -- silently elsewhere). The cross-attrib path above handles the rest.
         local spellID = (GBI.Taint and GBI.Taint.SafeSpellID and GBI.Taint.SafeSpellID(arg3)) or arg3
         if type(spellID) ~= "number" then return end
         onCast(unit, spellID)
+    elseif event == "UNIT_SPELLCAST_INTERRUPTED" then
+        local unit = arg1
+        local isEnemy = unit == "target" or unit == "focus"
+            or (type(unit) == "string" and (unit:match("^boss%d$") or unit:match("^nameplate%d+$")))
+        if isEnemy then attributeInterrupt() end
     elseif event == "CHALLENGE_MODE_START" then
         M.Reset()
     elseif event == "ZONE_CHANGED_NEW_AREA" or event == "PLAYER_ENTERING_WORLD" then
