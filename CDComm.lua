@@ -39,11 +39,20 @@ local function senderToUnit(sender)
 end
 
 function M.Broadcast(spellID, duration)
-    if not enabled() then return end
-    if not IsInGroup() then return end
-    if type(spellID) ~= "number" or type(duration) ~= "number" then return end
+    if not enabled() then
+        log("Debug", "broadcast skip: comm disabled (spell=%s)", tostring(spellID)); return
+    end
+    if not IsInGroup() then
+        log("Debug", "broadcast skip: not in group (spell=%s)", tostring(spellID)); return
+    end
+    if type(spellID) ~= "number" or type(duration) ~= "number" then
+        log("Debug", "broadcast skip: bad args (spell=%s dur=%s)",
+            tostring(spellID), tostring(duration)); return
+    end
     local channel = IsInRaid() and "RAID" or "PARTY"
-    C_ChatInfo.SendAddonMessage(PREFIX, ("U;%d;%d"):format(spellID, duration), channel)
+    local ok, err = C_ChatInfo.SendAddonMessage(PREFIX, ("U;%d;%d"):format(spellID, duration), channel)
+    log("Debug", "broadcast U;%d;%d -> %s (ok=%s err=%s)",
+        spellID, duration, channel, tostring(ok), tostring(err))
 end
 
 local f = CreateFrame("Frame", "GOBIGnINTERRUPT_CommFrame")
@@ -57,24 +66,31 @@ f:SetScript("OnEvent", function(_, event, prefix, msg, channel, sender)
         return
     end
     if event ~= "CHAT_MSG_ADDON" or prefix ~= PREFIX then return end
-    if not enabled() then return end
+    log("Debug", "recv raw msg=%s sender=%s ch=%s", tostring(msg), tostring(sender), tostring(channel))
+    if not enabled() then log("Debug", "  drop: comm disabled"); return end
 
-    -- Drop own messages (we already tracked the cast locally).
     local me = UnitName("player")
     if sender == me or (type(sender) == "string" and sender:match("^([^%-]+)") == me) then
+        log("Debug", "  drop: self message")
         return
     end
 
     local mt, sidStr, durStr = strsplit(";", msg or "")
-    if mt ~= "U" then return end
+    if mt ~= "U" then log("Debug", "  drop: bad msgType=%s", tostring(mt)); return end
     local sid = tonumber(sidStr); local dur = tonumber(durStr)
-    if not sid or not dur then return end
+    if not sid or not dur then
+        log("Debug", "  drop: bad parse sid=%s dur=%s", tostring(sidStr), tostring(durStr)); return
+    end
 
     local unit = senderToUnit(sender)
-    if not unit then return end
+    if not unit then
+        log("Debug", "  drop: senderToUnit nil for %s", tostring(sender)); return
+    end
 
     local cd = GBI.GetCooldown and GBI.GetCooldown(sid)
-    if not cd then return end
+    if not cd then
+        log("Debug", "  drop: spell %d not in receiver's DB", sid); return
+    end
 
     log("Debug", "recv U %s -> %s spell=%d dur=%d", sender, unit, sid, dur)
     if GBI.Brain and GBI.Brain.OnCast then
