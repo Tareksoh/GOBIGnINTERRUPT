@@ -73,6 +73,7 @@ GBI.Cooldowns = {
 [106951] = { name = "Berserk",             duration = 180, class = "DRUID",      category = K.CAT_BIGCD, spec = {2} },  -- OmniReborn base
 [194223] = { name = "Celestial Alignment", duration = 180, class = "DRUID",      category = K.CAT_BIGCD, spec = {1} },
 [191427] = { name = "Metamorphosis (Hav)", duration = 180, class = "DEMONHUNTER",category = K.CAT_BIGCD, spec = {1} },  -- OmniReborn base
+[1217605]= { name = "Void Metamorphosis", duration = 120, class = "DEMONHUNTER",category = K.CAT_BIGCD, spec = {3} },  -- Devourer; CD shrinks dynamically (peer D messages keep it in sync)
 [370965] = { name = "The Hunt",            duration = 90, class = "DEMONHUNTER", category = K.CAT_BIGCD },
 [375087] = { name = "Dragonrage",          duration = 120, class = "EVOKER",     category = K.CAT_BIGCD, spec = {1} },
 [359073] = { name = "Eternity Surge",      duration = 30, class = "EVOKER",      category = K.CAT_BIGCD, spec = {1} },
