@@ -111,8 +111,12 @@ f:RegisterEvent("GROUP_ROSTER_UPDATE")
 
 f:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
     if event == "UNIT_SPELLCAST_SUCCEEDED" then
-        local unit, _, spellID = arg1, arg2, arg3
+        local unit = arg1
         if unit ~= "player" and not (type(unit) == "string" and unit:match("^party[1-4]$")) then return end
+        -- arg3 (spellID) is secret-tagged on remote-PC party members in 12.0.5;
+        -- launder via Taint.SafeSpellID before any table-key indexing.
+        local spellID = (GBI.Taint and GBI.Taint.SafeSpellID and GBI.Taint.SafeSpellID(arg3)) or arg3
+        if type(spellID) ~= "number" then return end
         onCast(unit, spellID)
     elseif event == "CHALLENGE_MODE_START" then
         M.Reset()

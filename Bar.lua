@@ -499,6 +499,10 @@ local function dispatch(state, fnName, unit, spellID)
     else
         if unitOverlayActive() then
             local ov = GBI.UnitOverlay
+            -- The overlay visibility may have been flipped off by an engine
+            -- state change (M.Hide on context=world). Re-ensure it's shown
+            -- whenever we have a CD to paint and the user has the option on.
+            if ov.Show then ov.Show() end
             if ov[fnName] then ov[fnName](unit, spellID, state) end
         else
             barCD[fnName](unit, spellID, state)

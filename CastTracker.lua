@@ -53,8 +53,12 @@ f:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
     if (not spellID) or (not GBI.GetCooldown(spellID)) then
         local castGUID = arg2
         if type(castGUID) == "string" then
-            local m = castGUID:match("^Cast%-%d+%-%d+%-%d+%-%d+%-(%d+)%-")
-            local fromGUID = tonumber(m)
+            -- castGUID itself may be secret-tagged on remote-PC party members;
+            -- wrap the index call (`:match`) in pcall so we don't take taint
+            -- from the throw, and fall back to no recovery.
+            local ok, m = pcall(string.match, castGUID,
+                "^Cast%-%d+%-%d+%-%d+%-%d+%-(%d+)%-")
+            local fromGUID = ok and tonumber(m) or nil
             if fromGUID and GBI.GetCooldown(fromGUID) then
                 log("Debug", "  recovered spell %d from castGUID (arg3 was %s)",
                     fromGUID, tostring(rawSpellID))
