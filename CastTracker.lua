@@ -51,18 +51,32 @@ f:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
     -- castGUID format: Cast-<type>-<server>-<inst>-<zoneUID>-<spellID>-<counter>
     local spellID = GBI.Taint.SafeSpellID(rawSpellID)
     if not spellID then
-        -- raw arg3 was unusable (secret-tagged or otherwise); recover the
-        -- spellID from the castGUID's segment 6. castGUID itself may be
-        -- secret-tagged so the match is pcall'd.
+        -- raw arg3 was unusable (secret-tagged); recover spellID from
+        -- castGUID segment 6. The GUID itself can be tagged so we first
+        -- launder it via string.format("%s") (C-level, drops the taint
+        -- marker), then pcall the match in case format itself failed.
         local castGUID = arg2
         if type(castGUID) == "string" then
-            local ok, m = pcall(string.match, castGUID,
-                "^Cast%-%d+%-%d+%-%d+%-%d+%-(%d+)%-")
-            local fromGUID = ok and tonumber(m) or nil
-            if fromGUID then
-                log("Debug", "  recovered spell %d from castGUID (arg3 was %s)",
-                    fromGUID, tostring(rawSpellID))
-                spellID = fromGUID
+            local cleanGUID
+            local okF, formatted = pcall(string.format, "%s", castGUID)
+            if okF and type(formatted) == "string" then
+                cleanGUID = formatted
+            else
+                local okT, t = pcall(tostring, castGUID)
+                if okT and type(t) == "string" then cleanGUID = t end
+            end
+            if cleanGUID then
+                local okM, m = pcall(string.match, cleanGUID,
+                    "^Cast%-%d+%-%d+%-%d+%-%d+%-(%d+)%-")
+                local fromGUID = okM and tonumber(m) or nil
+                if fromGUID then
+                    log("Debug", "  recovered spell %d from castGUID (arg3 was %s)",
+                        fromGUID, tostring(rawSpellID))
+                    spellID = fromGUID
+                else
+                    log("Debug", "  match failed: ok=%s m=%s clean=%s",
+                        tostring(okM), tostring(m), tostring(cleanGUID):sub(1,40))
+                end
             end
         end
     end
