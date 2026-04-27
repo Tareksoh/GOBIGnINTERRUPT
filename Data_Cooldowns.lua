@@ -146,6 +146,31 @@ GBI.Cooldowns = {
 [6940]   = { name = "Blessing of Sacrifice",  duration = 120, class = "PALADIN",category = K.CAT_UTILITY, spec = {1} },
 [1044]   = { name = "Blessing of Freedom", duration = 25, class = "PALADIN",    category = K.CAT_UTILITY },
 
+-- ========================= ADDED FROM InterruptTrack ========================
+
+[204021] = { name = "Fiery Brand",         duration = 60,  class = "DEMONHUNTER",category = K.CAT_DEFENSIVE, spec = {2} },
+[187827] = { name = "Metamorphosis (Veng)",duration = 120, class = "DEMONHUNTER",category = K.CAT_DEFENSIVE, spec = {2} },
+[209258] = { name = "Last Resort",         duration = 480, class = "DEMONHUNTER",category = K.CAT_DEFENSIVE, spec = {2} },
+[50334]  = { name = "Berserk (Guardian)",  duration = 180, class = "DRUID",      category = K.CAT_DEFENSIVE, spec = {3} },
+[102342] = { name = "Ironbark",            duration = 90,  class = "DRUID",      category = K.CAT_DEFENSIVE, spec = {4} },
+[357170] = { name = "Time Dilation",       duration = 60,  class = "EVOKER",     category = K.CAT_DEFENSIVE, spec = {2} },
+[1250646]= { name = "Takedown",            duration = 90,  class = "HUNTER",     category = K.CAT_BIGCD,     spec = {3} },
+[132578] = { name = "Invoke Niuzao",       duration = 120, class = "MONK",       category = K.CAT_BIGCD,     spec = {1} },
+[116849] = { name = "Life Cocoon",         duration = 120, class = "MONK",       category = K.CAT_DEFENSIVE, spec = {3} },
+[64843]  = { name = "Divine Hymn",         duration = 180, class = "PRIEST",     category = K.CAT_DEFENSIVE, spec = {2} },
+[47788]  = { name = "Guardian Spirit",     duration = 180, class = "PRIEST",     category = K.CAT_DEFENSIVE, spec = {2} },
+[185313] = { name = "Shadow Dance",        duration = 20,  class = "ROGUE",      category = K.CAT_BIGCD,     spec = {3} },
+[114052] = { name = "Ascendance (Resto)",  duration = 180, class = "SHAMAN",     category = K.CAT_DEFENSIVE, spec = {3} },
+[118038] = { name = "Die by the Sword",    duration = 120, class = "WARRIOR",    category = K.CAT_DEFENSIVE, spec = {1} },
+[184364] = { name = "Enraged Regeneration",duration = 120, class = "WARRIOR",    category = K.CAT_DEFENSIVE, spec = {2} },
+
+-- Additional commonly-tracked CDs not in either source
+[216331] = { name = "Avenging Crusader",   duration = 60,  class = "PALADIN",    category = K.CAT_BIGCD,     spec = {1} },
+[342245] = { name = "Alter Time",          duration = 50,  class = "MAGE",       category = K.CAT_DEFENSIVE },
+[414659] = { name = "Ice Cold",            duration = 240, class = "MAGE",       category = K.CAT_DEFENSIVE },
+[204018] = { name = "Blessing of Spellwarding", duration = 180, class = "PALADIN",category = K.CAT_DEFENSIVE, spec = {2} },
+[119914] = { name = "Axe Toss",            duration = 24,  class = "WARLOCK",    category = K.CAT_INTERRUPT, spec = {2} },
+
 }
 
 -- Flat lookup helper. Given a spellID (already laundered via Taint.SafeSpellID),
