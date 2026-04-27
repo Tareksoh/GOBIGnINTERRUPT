@@ -39,6 +39,57 @@ local function fire(unit, spellID, cd)
     end
 end
 
+-- ---------------------------------------------------------------------------
+-- Polling fallback. On some remote-PC configurations both UNIT_SPELLCAST_*
+-- and UNIT_AURA events go silent for party members in 12.0.5. We bypass
+-- the event wall by directly polling C_UnitAuras every 0.75s and treating
+-- "newly seen aura since last tick" as a cast event.
+-- ---------------------------------------------------------------------------
+
+local POLL_INTERVAL = 0.75
+local seenAuras = {}     -- [unit] = { [auraName] = lastSeenAt }
+
+local function pollPartyAuras()
+    local now = GetTime()
+    for _, unit in ipairs(K.PARTY_OTHERS or { "party1", "party2", "party3", "party4" }) do
+        if UnitExists(unit) then
+            seenAuras[unit] = seenAuras[unit] or {}
+            local _, classToken = UnitClass(unit)
+            for i = 1, 40 do
+                local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, unit, i, "HELPFUL")
+                if not ok or not aura then break end
+                local okN, name = pcall(function() return aura.name end)
+                if okN and type(name) == "string" then
+                    local last = seenAuras[unit][name]
+                    -- New aura, OR the same aura recently expired and was re-applied
+                    if not last or (now - last) > 5 then
+                        local sid = GBI.AuraMap and GBI.AuraMap.LookupByName
+                            and GBI.AuraMap.LookupByName(name, classToken)
+                        if sid then
+                            local cd = GBI.GetCooldown(sid)
+                            if cd then
+                                log("Debug", "poll-detect '%s' on %s -> %d", name, unit, sid)
+                                if GBI.Brain and GBI.Brain.OnCast then
+                                    GBI.Brain.OnCast(unit, sid, cd)
+                                end
+                            end
+                        end
+                    end
+                    seenAuras[unit][name] = now
+                end
+            end
+        end
+    end
+end
+
+local poller = CreateFrame("Frame")
+poller:SetScript("OnUpdate", function(self, elapsed)
+    self.acc = (self.acc or 0) + elapsed
+    if self.acc < POLL_INTERVAL then return end
+    self.acc = 0
+    pcall(pollPartyAuras)
+end)
+
 f:SetScript("OnEvent", function(_, event, unit, updateInfo)
     if event ~= "UNIT_AURA" then return end
     if not K.PARTY_UNITS_SET[unit] then return end
