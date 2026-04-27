@@ -92,6 +92,9 @@ local function newBar(spec)
             bar:SetStatusBarTexture("Interface\\TARGETINGFRAME\\UI-StatusBar")
             bar:SetStatusBarColor(0.15, 0.55, 0.85, 0.85)   -- neutral teal-blue, no class collision
             bar:SetMinMaxValues(0, 1); bar:SetValue(0)
+            -- Direction: RIGHT = fill anchored left, empties from right (icons
+            -- start right, slide left as CD ticks). LEFT = mirror (SetReverseFill).
+            if effGrowDir() == "LEFT" then bar:SetReverseFill(true) else bar:SetReverseFill(false) end
             local bg = bar:CreateTexture(nil, "BACKGROUND"); bg:SetAllPoints(bar)
             bg:SetColorTexture(0, 0, 0, 0.45)
             -- Countdown text comes from the icon's CooldownFrameTemplate
@@ -109,6 +112,7 @@ local function newBar(spec)
                 -- its own remaining-fraction so they ride the tick-down.
                 local soonestStart, soonestEnd
                 local barW = self:GetWidth()
+                local growLeft = effGrowDir() == "LEFT"
                 for _, e in ipairs(self.iconList or {}) do
                     if e.icon:IsShown() and e.endsAt then
                         if not soonestEnd or e.endsAt < soonestEnd then
@@ -119,7 +123,12 @@ local function newBar(spec)
                         local rem = math.max(0, e.endsAt - now)
                         local frac = rem / total
                         e.icon:ClearAllPoints()
-                        e.icon:SetPoint("CENTER", self, "LEFT", frac * barW, 0)
+                        if growLeft then
+                            -- Icon starts at left edge, slides right toward bar's right end as fill empties.
+                            e.icon:SetPoint("CENTER", self, "RIGHT", -frac * barW, 0)
+                        else
+                            e.icon:SetPoint("CENTER", self, "LEFT",  frac * barW, 0)
+                        end
                     end
                 end
 
