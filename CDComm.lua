@@ -75,6 +75,29 @@ function M.BroadcastInterrupt()
     return send("I")
 end
 
+-- Late-join query: ask peers for their active CDs.
+function M.SendQuery()
+    log("Debug", "send Q")
+    return send("Q")
+end
+
+-- Reply to a Q with our current active CDs (one U message each, throttled
+-- via a tiny stagger so we don't flood the addon channel).
+local function replyToQuery()
+    if not (GBI.Brain and GBI.Brain.GetPlayerActiveCDs) then return end
+    local i = 0
+    for sid, s in pairs(GBI.Brain.GetPlayerActiveCDs()) do
+        local rem = math.max(0, s.endsAt - GetTime())
+        if rem > 1 then
+            i = i + 1
+            local delay = i * 0.05    -- 50ms stagger
+            C_Timer.After(delay, function()
+                M.Broadcast(sid, rem, s.charges, s.chargesMax)
+            end)
+        end
+    end
+end
+
 -- "Cooldown delta" — used when a CD's remaining time shrinks mid-flight
 -- (e.g. Devourer DH Metamorphosis reduced by ability usage). spellID +
 -- the new remaining seconds.
@@ -116,8 +139,14 @@ f:SetScript("OnEvent", function(_, event, prefix, msg, channel, sender)
     if event == "PLAYER_ENTERING_WORLD"
        or event == "PLAYER_SPECIALIZATION_CHANGED"
        or event == "GROUP_ROSTER_UPDATE" then
-        -- Re-announce on these so late joiners learn our spec.
+        -- Re-announce spec on these so late joiners learn our spec.
         C_Timer.After(1.5, announceSpec)
+        -- And ask peers for their currently-active CDs so we paint
+        -- in-flight cooldowns immediately on join (instead of waiting
+        -- for the next cast).
+        if event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ENTERING_WORLD" then
+            C_Timer.After(2.0, M.SendQuery)
+        end
         return
     end
     if event ~= "CHAT_MSG_ADDON" or prefix ~= PREFIX then return end
@@ -174,6 +203,9 @@ f:SetScript("OnEvent", function(_, event, prefix, msg, channel, sender)
         if GBI.Brain and GBI.Brain.UpdateRemaining then
             GBI.Brain.UpdateRemaining(unit, sid, rem)
         end
+    elseif mt == "Q" then
+        log("Debug", "recv Q from %s -> reply with active CDs", sender)
+        replyToQuery()
     elseif mt == "K" then
         local sid = tonumber(parts[2]); local n = tonumber(parts[3])
         if not sid or not n then return end

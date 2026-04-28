@@ -252,6 +252,21 @@ function M.GetState(unit, spellID)
     return state[unit][spellID]
 end
 
+-- Returns the player's currently-active (endsAt > now) tracked CDs.
+-- Used by CDComm to reply to a `Q` (query) message — late-joiners learn
+-- about CDs already running before they joined.
+function M.GetPlayerActiveCDs()
+    local out = {}
+    if not state.player then return out end
+    local now = GetTime()
+    for sid, s in pairs(state.player) do
+        if s.endsAt and s.endsAt > now then
+            out[sid] = s
+        end
+    end
+    return out
+end
+
 -- Stacks for stack-resource spells. We synthesize a state entry so the
 -- Bar/Overlay can render the icon (with a stack count overlay) even though
 -- there's no traditional cooldown. endsAt is intentionally far in the

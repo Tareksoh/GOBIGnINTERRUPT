@@ -149,6 +149,74 @@ GBI.Cooldowns = {
 [6940]   = { name = "Blessing of Sacrifice",  duration = 120, class = "PALADIN",category = K.CAT_UTILITY, spec = {1} },
 [1044]   = { name = "Blessing of Freedom", duration = 25, class = "PALADIN",    category = K.CAT_UTILITY },
 
+-- ========================= STUNS / CC (mostly AoE) ==========================
+
+-- Mage
+[122]    = { name = "Frost Nova",          duration = 30, class = "MAGE",        category = K.CAT_UTILITY },
+[113724] = { name = "Ring of Frost",       duration = 45, class = "MAGE",        category = K.CAT_UTILITY, spec = {3} },
+[118]    = { name = "Polymorph",           duration = 0,  class = "MAGE",        category = K.CAT_UTILITY },
+
+-- Warrior
+[46968]  = { name = "Shockwave",           duration = 40, class = "WARRIOR",     category = K.CAT_UTILITY, spec = {3} },
+[107570] = { name = "Storm Bolt",          duration = 30, class = "WARRIOR",     category = K.CAT_UTILITY },
+[5246]   = { name = "Intimidating Shout",  duration = 90, class = "WARRIOR",     category = K.CAT_UTILITY },
+
+-- Rogue
+[2094]   = { name = "Blind",               duration = 120, class = "ROGUE",      category = K.CAT_UTILITY },
+[408]    = { name = "Kidney Shot",         duration = 20, class = "ROGUE",       category = K.CAT_UTILITY },
+[1776]   = { name = "Gouge",               duration = 15, class = "ROGUE",       category = K.CAT_UTILITY },
+
+-- Druid
+[5211]   = { name = "Mighty Bash",         duration = 50, class = "DRUID",       category = K.CAT_UTILITY },
+[33786]  = { name = "Cyclone",             duration = 20, class = "DRUID",       category = K.CAT_UTILITY },
+[99]     = { name = "Incapacitating Roar", duration = 30, class = "DRUID",       category = K.CAT_UTILITY, spec = {3} },
+[102359] = { name = "Mass Entanglement",   duration = 30, class = "DRUID",       category = K.CAT_UTILITY },
+
+-- Paladin
+[853]    = { name = "Hammer of Justice",   duration = 60, class = "PALADIN",     category = K.CAT_UTILITY },
+[20066]  = { name = "Repentance",          duration = 15, class = "PALADIN",     category = K.CAT_UTILITY, spec = {3} },
+[115750] = { name = "Blinding Light",      duration = 90, class = "PALADIN",     category = K.CAT_UTILITY },
+
+-- Hunter
+[19577]  = { name = "Intimidation",        duration = 60, class = "HUNTER",      category = K.CAT_UTILITY },
+[187650] = { name = "Freezing Trap",       duration = 30, class = "HUNTER",      category = K.CAT_UTILITY },
+[19386]  = { name = "Wyvern Sting",        duration = 45, class = "HUNTER",      category = K.CAT_UTILITY, spec = {3} },
+[109248] = { name = "Binding Shot",        duration = 45, class = "HUNTER",      category = K.CAT_UTILITY },
+
+-- Monk
+[119381] = { name = "Leg Sweep",           duration = 60, class = "MONK",        category = K.CAT_UTILITY },
+[115078] = { name = "Paralysis",           duration = 45, class = "MONK",        category = K.CAT_UTILITY },
+[116844] = { name = "Ring of Peace",       duration = 45, class = "MONK",        category = K.CAT_UTILITY },
+
+-- Priest
+[8122]   = { name = "Psychic Scream",      duration = 60, class = "PRIEST",      category = K.CAT_UTILITY },
+[205369] = { name = "Mind Bomb",           duration = 30, class = "PRIEST",      category = K.CAT_UTILITY, spec = {3} },
+[64044]  = { name = "Psychic Horror",      duration = 45, class = "PRIEST",      category = K.CAT_UTILITY, spec = {3} },
+
+-- Warlock
+[5484]   = { name = "Howl of Terror",      duration = 40, class = "WARLOCK",     category = K.CAT_UTILITY },
+[30283]  = { name = "Shadowfury",          duration = 30, class = "WARLOCK",     category = K.CAT_UTILITY },
+[6789]   = { name = "Mortal Coil",         duration = 45, class = "WARLOCK",     category = K.CAT_UTILITY },
+
+-- Death Knight
+[108194] = { name = "Asphyxiate",          duration = 45, class = "DEATHKNIGHT", category = K.CAT_UTILITY, spec = {3} },
+[221562] = { name = "Asphyxiate (Blood)",  duration = 45, class = "DEATHKNIGHT", category = K.CAT_UTILITY, spec = {1} },
+
+-- Shaman
+[51514]  = { name = "Hex",                 duration = 30, class = "SHAMAN",      category = K.CAT_UTILITY },
+[2484]   = { name = "Earthbind Totem",     duration = 30, class = "SHAMAN",      category = K.CAT_UTILITY },
+
+-- Demon Hunter
+[179057] = { name = "Chaos Nova",          duration = 60, class = "DEMONHUNTER", category = K.CAT_UTILITY },
+[217832] = { name = "Imprison",            duration = 45, class = "DEMONHUNTER", category = K.CAT_UTILITY },
+[211881] = { name = "Fel Eruption",        duration = 30, class = "DEMONHUNTER", category = K.CAT_UTILITY, spec = {1} },
+[202138] = { name = "Sigil of Chains",     duration = 90, class = "DEMONHUNTER", category = K.CAT_UTILITY },
+
+-- Evoker
+[360806] = { name = "Sleep Walk",          duration = 30, class = "EVOKER",      category = K.CAT_UTILITY },
+[357210] = { name = "Deep Breath",         duration = 120, class = "EVOKER",     category = K.CAT_UTILITY },
+[358385] = { name = "Landslide",           duration = 90, class = "EVOKER",      category = K.CAT_UTILITY },
+
 -- ========================= ADDED FROM InterruptTrack ========================
 
 [204021] = { name = "Fiery Brand",         duration = 60,  class = "DEMONHUNTER",category = K.CAT_DEFENSIVE, spec = {2} },
