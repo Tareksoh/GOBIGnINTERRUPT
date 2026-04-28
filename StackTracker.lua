@@ -112,3 +112,7 @@ function M.Get(unit, spellID)
 end
 
 function M.Refresh() refreshIndex() end
+
+-- Called from Brain.Reset on zone change / new dungeon to drop any stale
+-- stack counters (would otherwise leak across runs).
+function M.Reset() stacks = {} end

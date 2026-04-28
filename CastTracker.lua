@@ -105,7 +105,8 @@ f:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
     -- Spec filter: only fire if the unit's spec matches (when a spec list is given).
     if cd.spec then
         local guid = GBI.Taint and GBI.Taint.SafeGUID and GBI.Taint.SafeGUID(unit) or nil
-        local spec = guid and GBI.Inspect.GetSpecByGUID(guid) or nil
+        local spec = guid and GBI.Inspect and GBI.Inspect.GetSpecByGUID
+            and GBI.Inspect.GetSpecByGUID(guid) or nil
         if spec and not tContains(cd.spec, spec) then
             log("Debug", "skip %d on %s (spec %d not in cd.spec)", spellID, unit, spec)
             return

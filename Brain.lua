@@ -370,5 +370,6 @@ function M.Reset()
     burstStartAt   = nil
     burstPeakInFlight = 0
     if GBI.Bar and GBI.Bar.Reset then GBI.Bar.Reset() end
+    if GBI.StackTracker and GBI.StackTracker.Reset then GBI.StackTracker.Reset() end
     log("Info", "state reset")
 end

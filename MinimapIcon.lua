@@ -72,7 +72,11 @@ local function build()
             if _G.GBI_OpenConfig then _G.GBI_OpenConfig() end
         elseif mouseButton == "RightButton" then
             GOBIGnINTERRUPTDB.unitOverlay = GOBIGnINTERRUPTDB.unitOverlay or {}
-            GOBIGnINTERRUPTDB.unitOverlay.enabled = not GOBIGnINTERRUPTDB.unitOverlay.enabled
+            -- Toggle the unified cooldownsMode field instead of the legacy
+            -- unitOverlay.enabled (which can drift apart from cooldownsMode).
+            GOBIGnINTERRUPTDB.show = GOBIGnINTERRUPTDB.show or {}
+            local cur = GOBIGnINTERRUPTDB.show.cooldownsMode or "bar"
+            GOBIGnINTERRUPTDB.show.cooldownsMode = (cur == "overlay") and "bar" or "overlay"
             if GBI.Bar and GBI.Bar.RefreshLayout then GBI.Bar.RefreshLayout() end
         end
     end)

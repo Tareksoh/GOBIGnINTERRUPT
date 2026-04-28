@@ -234,7 +234,9 @@ local function dispatch(msg)
 
     if msg == "overlay" then
         GOBIGnINTERRUPTDB.unitOverlay = GOBIGnINTERRUPTDB.unitOverlay or {}
-        GOBIGnINTERRUPTDB.unitOverlay.enabled = not GOBIGnINTERRUPTDB.unitOverlay.enabled
+        GOBIGnINTERRUPTDB.show = GOBIGnINTERRUPTDB.show or {}
+        local cur = GOBIGnINTERRUPTDB.show.cooldownsMode or "bar"
+        GOBIGnINTERRUPTDB.show.cooldownsMode = (cur == "overlay") and "bar" or "overlay"
         say("CDs on party frames = " .. tostring(GOBIGnINTERRUPTDB.unitOverlay.enabled))
         if GBI.Bar and GBI.Bar.RefreshLayout then GBI.Bar.RefreshLayout() end
         return
