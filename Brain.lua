@@ -116,15 +116,21 @@ end
 -- The sender already applied their own talent CDR.
 function M.OnCast(unit, spellID, cdEntry, overrideDuration)
     if not unit or not spellID or not cdEntry then return end
-    -- Stack-resource spells (e.g. Void Meta) don't have a traditional CD;
-    -- StackTracker drives their display via SetStacks. If a peer (or any
-    -- code path) routes them here, treat as a cast flash and bail before
-    -- we set up an endsAt + timer that SetStacks will later nil out.
     if cdEntry.stackingResource then
         M.FlashCast(unit, spellID)
         return
     end
     local now = GetTime()
+    local fromPeer = overrideDuration ~= nil
+
+    -- Peer-priority: once a peer (with their actual talented duration) has
+    -- reported a cast, ignore local detections for the next 5s. They'd just
+    -- overwrite endsAt with our base/guess duration.
+    if not fromPeer then
+        local existing = state[unit] and state[unit][spellID]
+        if existing and existing.fromPeer and existing.startedAt
+            and (now - existing.startedAt) < 5 then return end
+    end
 
     -- per-(unit,spell) dedup
     recent[unit] = recent[unit] or {}
@@ -154,6 +160,7 @@ function M.OnCast(unit, spellID, cdEntry, overrideDuration)
         cdEntry    = cdEntry,
         charges    = cdEntry.charges,       -- nil for non-charged spells
         chargesMax = cdEntry.chargesMax,
+        fromPeer   = fromPeer,              -- peer broadcast vs local detection
     }
 
     -- bump in-flight counter for this spell

@@ -34,6 +34,7 @@ local DEFAULTS = {
     comm            = { enabled = true },              -- peer CD-sharing broadcast
     placeholders    = { enabled = true },               -- spec-aware placeholder pre-population
     show            = { interruptBar = true, cooldownBar = true },  -- per-window UI toggles
+    combatLog       = { enabled = true },               -- CLEU-based party CD detection
 }
 
 local SCHEMA_VERSION = 5
