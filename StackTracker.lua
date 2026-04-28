@@ -62,8 +62,11 @@ local function scanUnit(unit)
         local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, unit, i, "HELPFUL")
         if not ok or not aura then break end
         local okId, sid = pcall(function() return aura.spellId end)
-        if okId and sid then
-            local entry = auraIndex[sid]
+        -- Reject secret-tagged spellIds; pcall the table index defensively.
+        if okId and sid and not (GBI.Taint and GBI.Taint.IsSecret
+            and GBI.Taint.IsSecret(sid)) then
+            local okIdx, entry = pcall(function() return auraIndex[sid] end)
+            if not okIdx then entry = nil end
             if entry then
                 local okN, n = pcall(function() return aura.applications end)
                 local stackN = (okN and type(n) == "number") and n or 1

@@ -116,6 +116,14 @@ end
 -- The sender already applied their own talent CDR.
 function M.OnCast(unit, spellID, cdEntry, overrideDuration)
     if not unit or not spellID or not cdEntry then return end
+    -- Stack-resource spells (e.g. Void Meta) don't have a traditional CD;
+    -- StackTracker drives their display via SetStacks. If a peer (or any
+    -- code path) routes them here, treat as a cast flash and bail before
+    -- we set up an endsAt + timer that SetStacks will later nil out.
+    if cdEntry.stackingResource then
+        M.FlashCast(unit, spellID)
+        return
+    end
     local now = GetTime()
 
     -- per-(unit,spell) dedup
