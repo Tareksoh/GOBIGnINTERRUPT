@@ -215,6 +215,42 @@ end
 -- ---------------------------------------------------------------------------
 
 local panel, category
+local subpanels = {}     -- { { name=..., frame=..., content=... } }
+
+-- Helper: build a Settings-canvas-compatible subpanel frame with a scrollable
+-- content area and a title. Returns the panel frame and the inner content
+-- frame. Caller adds widgets to `content`.
+local function makeSubPanel(name, subtitle)
+    local sp = CreateFrame("Frame")
+    sp.name = name
+    sp:SetSize(560, 600)
+    sp:SetClipsChildren(true)
+
+    local sc = CreateFrame("ScrollFrame", nil, sp, "UIPanelScrollFrameTemplate")
+    sc:SetPoint("TOPLEFT", sp, "TOPLEFT", 0, 0)
+    sc:SetPoint("BOTTOMRIGHT", sp, "BOTTOMRIGHT", -28, 0)
+    sc:SetClipsChildren(true)
+    local content = CreateFrame("Frame", nil, sc)
+    content:SetSize(540, 1000)
+    content:SetPoint("TOPLEFT", sc, "TOPLEFT", 0, 0)
+    sc:SetScrollChild(content)
+
+    local title = content:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    title:SetPoint("TOPLEFT", 16, -16)
+    title:SetText(name)
+    if subtitle then
+        local st = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        st:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
+        st:SetText(subtitle)
+        st:SetTextColor(0.7, 0.7, 0.7)
+        sp._anchorTo = st
+    else
+        sp._anchorTo = title
+    end
+    sp._content = content
+    table.insert(subpanels, { name = name, frame = sp, content = content })
+    return sp, content
+end
 
 local function buildPanel()
     panel = CreateFrame("Frame")
@@ -658,15 +694,14 @@ local function buildPanel()
     burstList:SetPoint("TOPLEFT", modeLabel, "BOTTOMLEFT", 0, -12)
     panel._burstList = burstList
 
-    -- ============= 4. Spell DB management ============= --
-    local sdbHeader = content:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    sdbHeader:SetPoint("TOPLEFT", burstList, "BOTTOMLEFT", 0, -28)
-    sdbHeader:SetText("Spell database")
-
-    local sdbHelp = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    sdbHelp:SetPoint("TOPLEFT", sdbHeader, "BOTTOMLEFT", 0, -2)
-    sdbHelp:SetText("Pick a class, untick spells you don't want tracked, or add custom spell IDs.")
-    sdbHelp:SetTextColor(0.7, 0.7, 0.7)
+    -- ============= 4. Spell DB management (subpanel) ============= --
+    local sdbPanel, sdbContent = makeSubPanel("Spell Database",
+        "Pick a class+spec+category, untick spells you don't want tracked, or add custom spell IDs.")
+    -- shadow `content` locally so the rest of this block lays out into the
+    -- subpanel without needing to rewrite every reference
+    local content = sdbContent
+    local sdbHeader = sdbPanel._anchorTo
+    local sdbHelp = sdbHeader     -- existing references use sdbHelp as anchor
 
     local classDD = CreateFrame("DropdownButton", nil, content, "WowStyle1DropdownTemplate")
     classDD:SetPoint("TOPLEFT", sdbHelp, "BOTTOMLEFT", 0, -8)
@@ -860,10 +895,11 @@ local function buildPanel()
         rebuildList()
     end)
 
-    -- ============= 5. Profiles ============= --
-    local profHeader = content:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    profHeader:SetPoint("TOPLEFT", listScroll, "BOTTOMLEFT", 0, -190)
-    profHeader:SetText("Profiles")
+    -- ============= 5. Profiles (subpanel) ============= --
+    local profPanel, profContent = makeSubPanel("Profiles",
+        "Save settings as named profiles. Export to share with friends; import from text.")
+    local content = profContent     -- shadow for the Profiles block
+    local profHeader = profPanel._anchorTo
 
     local profDD = CreateFrame("DropdownButton", nil, content, "WowStyle1DropdownTemplate")
     profDD:SetPoint("TOPLEFT", profHeader, "BOTTOMLEFT", 0, -8)
@@ -946,12 +982,19 @@ local function buildPanel()
     profHelp:SetText("Type a profile name, then Save. To Export, click Export — copy the text. To Import, paste in the box and click Import.")
     profHelp:SetTextColor(0.7, 0.7, 0.7)
 
-    -- Grow content height to fit all sections
-    content:SetHeight(1700)
+    -- Subpanel content heights
+    sdbContent:SetHeight(900)
+    profContent:SetHeight(450)
+    -- Main panel content (General + Bars + Overlay + Sounds only now)
+    panel._content:SetHeight(1100)
 
     -- Register
     category = Settings.RegisterCanvasLayoutCategory(panel, "GOBIGnINTERRUPT")
     Settings.RegisterAddOnCategory(category)
+    -- Register each subpanel as a child category in the AddOns settings tree.
+    for _, sp in ipairs(subpanels) do
+        Settings.RegisterCanvasLayoutSubcategory(category, sp.frame, sp.name)
+    end
 end
 
 -- ---------------------------------------------------------------------------
