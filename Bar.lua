@@ -106,9 +106,8 @@ local function newBar(spec)
 
     local function saved() return GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.bars and GOBIGnINTERRUPTDB.bars[spec.key] or {} end
     local function effIcon()    return math.floor(ICON_BASE * self.scale + 0.5) end
-    local PROG_BAR_H = 8                                  -- thin bar strip
+    -- Interrupt bar: bar is icon-tall and icons ride the fill edge.
     local function effRowH()
-        if spec.progressBar then return effIcon() + 4 + PROG_BAR_H + 1 end
         return effIcon() + 4
     end
     local function effPerRow()
@@ -118,6 +117,7 @@ local function newBar(spec)
     local function effGrowDir() return saved().growDir or "RIGHT" end
     local function effBarWidth() return saved().barWidth or 220 end
     local function effPanelW()
+        if spec.progressBar then return NAME_WIDTH + effBarWidth() + 16 end
         return NAME_WIDTH + effPerRow() * (effIcon() + ICON_GAP) + 16
     end
     local function effPanelH()  return 16 + #K.PARTY_UNITS * (effRowH() + ROW_GAP) end
@@ -128,21 +128,12 @@ local function newBar(spec)
         row:SetSize(effPanelW() - 16, effRowH())
         row:SetPoint("TOPLEFT", self.anchor, "TOPLEFT", 8, -8 - (idx - 1) * (effRowH() + ROW_GAP))
 
-        -- Row backdrop (translucent strip behind name + icons).
-        row.bg = row:CreateTexture(nil, "BACKGROUND")
-        row.bg:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
-        row.bg:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0,
-            spec.progressBar and (PROG_BAR_H + 1) or 0)
-        row.bg:SetColorTexture(0, 0, 0, 0.35)
-
         if spec.progressBar then
-            -- Thin progress bar at the bottom of the row tracking the
-            -- soonest-ending interrupt's remaining time. Decorative — the
-            -- icon grid above is the primary readout.
+            -- Bar fills the right portion of the row; name strip on its left.
             local bar = CreateFrame("StatusBar", nil, row)
-            bar:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
-            bar:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
-            bar:SetHeight(PROG_BAR_H)
+            bar:SetPoint("LEFT", row, "LEFT", NAME_WIDTH, 0)
+            bar:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+            bar:SetHeight(effIcon() + 4)
             bar:SetStatusBarTexture("Interface\\TARGETINGFRAME\\UI-StatusBar")
             bar:SetStatusBarColor(0.15, 0.55, 0.85, 0.85)
             bar:SetMinMaxValues(0, 1); bar:SetValue(0)
@@ -150,17 +141,41 @@ local function newBar(spec)
             local bbg = bar:CreateTexture(nil, "BACKGROUND"); bbg:SetAllPoints(bar)
             bbg:SetColorTexture(0, 0, 0, 0.55)
             row.progBar = bar
+            -- OnUpdate: drives bar value from soonest-ending icon AND positions
+            -- every visible icon along its own remaining-fraction so they ride
+            -- the tick-down. Placeholder icons park at the frac=0 end.
             bar:SetScript("OnUpdate", function(self, elapsed)
                 self.acc = (self.acc or 0) + elapsed
-                if self.acc < 0.1 then return end
+                if self.acc < 0.05 then return end
                 self.acc = 0
                 local now = GetTime()
+                local barW = self:GetWidth()
+                local growLeft = effGrowDir() == "LEFT"
                 local soonestStart, soonestEnd
                 for _, e in ipairs(self.iconList or {}) do
-                    if e.icon:IsShown() and e.endsAt and e.endsAt > now then
-                        if not soonestEnd or e.endsAt < soonestEnd then
-                            soonestStart = e.startedAt or now
-                            soonestEnd   = e.endsAt
+                    if e.icon:IsShown() then
+                        if e.endsAt and e.endsAt > now then
+                            if not soonestEnd or e.endsAt < soonestEnd then
+                                soonestStart = e.startedAt or now
+                                soonestEnd   = e.endsAt
+                            end
+                            local total = math.max(0.1, e.endsAt - (e.startedAt or now))
+                            local rem   = math.max(0, e.endsAt - now)
+                            local frac  = rem / total
+                            e.icon:ClearAllPoints()
+                            if growLeft then
+                                e.icon:SetPoint("CENTER", self, "RIGHT", -frac * barW, 0)
+                            else
+                                e.icon:SetPoint("CENTER", self, "LEFT",   frac * barW, 0)
+                            end
+                        else
+                            -- Placeholder / ready: park at the "ready" end (frac=0).
+                            e.icon:ClearAllPoints()
+                            if growLeft then
+                                e.icon:SetPoint("CENTER", self, "RIGHT", 0, 0)
+                            else
+                                e.icon:SetPoint("CENTER", self, "LEFT",  0, 0)
+                            end
                         end
                     end
                 end
@@ -171,17 +186,24 @@ local function newBar(spec)
                 self:SetMinMaxValues(0, total)
                 self:SetValue(soonestEnd - now)
             end)
+        else
+            row.bg = row:CreateTexture(nil, "BACKGROUND")
+            row.bg:SetAllPoints(row)
+            row.bg:SetColorTexture(0, 0, 0, 0.35)
         end
 
-        -- Name strip on the LEFT (same for both bars now that the interrupt
-        -- bar uses the grid layout).
         row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        row.name:SetPoint("LEFT", row, "LEFT", 4, 0)
-        row.name:SetWidth(NAME_WIDTH)
-        row.name:SetJustifyH("LEFT")
         if spec.progressBar then
+            -- Name strip in the NAME_WIDTH gap to the LEFT of the bar.
+            row.name:SetPoint("LEFT", row, "LEFT", 4, 0)
+            row.name:SetPoint("RIGHT", row.progBar, "LEFT", -4, 0)
+            row.name:SetJustifyH("RIGHT")
             local f, sz = row.name:GetFont()
             if f then row.name:SetFont(f, sz or 12, "OUTLINE") end
+        else
+            row.name:SetPoint("LEFT", row, "LEFT", 4, 0)
+            row.name:SetWidth(NAME_WIDTH)
+            row.name:SetJustifyH("LEFT")
         end
 
         self.rows[unit] = row
@@ -500,11 +522,11 @@ local function newBar(spec)
             local growLeft = effGrowDir() == "LEFT"
             for _, row in pairs(self.rows) do
                 if row.progBar then
-                    row.progBar:SetHeight(PROG_BAR_H)
+                    row.progBar:SetHeight(effIcon() + 4)
                     row.progBar:SetReverseFill(growLeft)
                 end
             end
-            -- fall through to icon grid relayout (same as cooldown bar)
+            return  -- bar OnUpdate handles icon positions per-frame
         end
         -- relayout visible icons in each row (with wrap + grow direction)
         for unit, list in pairs(self.icons) do
@@ -611,7 +633,9 @@ local function newBar(spec)
             hideGlow(entry.icon); entry.glowing = false
         end
 
-        do
+        if spec.progressBar then
+            -- Icons positioned by the bar's OnUpdate (riding fill edge).
+        else
             local visible = {}
             for _, e in ipairs(list) do
                 if e.icon:IsShown() then visible[#visible + 1] = e end
@@ -749,6 +773,19 @@ function M.TestInterruptFill(durationS)
             cdEntry   = { name = "Pummel", duration = durationS, category = K.CAT_INTERRUPT },
         })
     end
+    -- Auto-clean the test entries when the duration ends — without this they'd
+    -- linger as ready-glowing icons forever (test casts have no real CD).
+    C_Timer.After(durationS + 0.5, function()
+        for _, unit in ipairs(K.PARTY_UNITS) do
+            local list = barInt.icons and barInt.icons[unit] or {}
+            for i = #list, 1, -1 do
+                if list[i].spellID == 6552 then
+                    list[i].icon:Hide()
+                    table.remove(list, i)
+                end
+            end
+        end
+    end)
 end
 
 function M.RefreshLocked()

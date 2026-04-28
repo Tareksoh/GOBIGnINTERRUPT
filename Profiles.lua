@@ -58,13 +58,35 @@ end
 
 function M.List()
     local out = {}
-    for name in pairs(GOBIGnINTERRUPTDB.profiles or {}) do out[#out+1] = name end
+    -- Defensive: ensure Default is always present even if EnsureDefault
+    -- hasn't run yet (e.g. UI panel built before PLAYER_LOGIN).
+    local seen = { Default = true }
+    out[1] = "Default"
+    for name in pairs(GOBIGnINTERRUPTDB.profiles or {}) do
+        if not seen[name] then
+            seen[name] = true
+            out[#out+1] = name
+        end
+    end
     table.sort(out)
     return out
 end
 
 function M.GetActiveName()
     return GOBIGnINTERRUPTDB.activeProfile or "Default"
+end
+
+-- Ensure a "Default" profile always exists. Called once at addon load
+-- so the Options dropdown is never empty, and so users always have a
+-- baseline they can revert to.
+function M.EnsureDefault()
+    GOBIGnINTERRUPTDB.profiles = GOBIGnINTERRUPTDB.profiles or {}
+    if not GOBIGnINTERRUPTDB.profiles["Default"] then
+        GOBIGnINTERRUPTDB.profiles["Default"] = snapshotCurrent()
+    end
+    if not GOBIGnINTERRUPTDB.activeProfile then
+        GOBIGnINTERRUPTDB.activeProfile = "Default"
+    end
 end
 
 function M.Save(name)
@@ -139,6 +161,11 @@ function M.Export(name)
     if not snap then return nil, "no such profile" end
     return "GBINT:" .. serialize(snap)
 end
+
+-- Init on PLAYER_LOGIN.
+local f = CreateFrame("Frame")
+f:RegisterEvent("PLAYER_LOGIN")
+f:SetScript("OnEvent", function() M.EnsureDefault() end)
 
 function M.Import(name, str)
     if type(name) ~= "string" or name == "" then return false, "empty name" end

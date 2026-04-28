@@ -321,7 +321,7 @@ local function buildPanel()
     -- Cooldowns mode dropdown — replaces the old "Show CD bar" + "Show
     -- on party frames" pair which interacted confusingly.
     local cdModeLbl = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    cdModeLbl:SetPoint("TOPLEFT", showInt, "BOTTOMLEFT", 4, -6)
+    cdModeLbl:SetPoint("TOPLEFT", showInt, "BOTTOMLEFT", 0, -6)
     cdModeLbl:SetText("Cooldowns display")
     local cdModeDD = CreateFrame("DropdownButton", nil, content, "WowStyle1DropdownTemplate")
     cdModeDD:SetPoint("LEFT", cdModeLbl, "RIGHT", 8, 0); cdModeDD:SetWidth(180)
@@ -356,7 +356,9 @@ local function buildPanel()
     local showCD = cdModeDD
 
     local glowTgl = CreateFrame("CheckButton", nil, content, "UICheckButtonTemplate")
-    glowTgl:SetPoint("TOPLEFT", showCD, "BOTTOMLEFT", 0, -2)
+    -- Anchor to cdModeLbl (left-margin column), NOT cdModeDD (which is to
+    -- the right of the label and would push glow off-axis).
+    glowTgl:SetPoint("TOPLEFT", cdModeLbl, "BOTTOMLEFT", -4, -8)
     cbLabel(glowTgl):SetText("Glow icons in last 2s before ready")
     glowTgl:SetScript("OnShow", function(s) s:SetChecked(db().glow and true or false) end)
     glowTgl:SetScript("OnClick", function(s) db().glow = s:GetChecked() and true or false end)
@@ -365,12 +367,16 @@ local function buildPanel()
     -- "Cooldowns display" dropdown above which has Bar / Overlay / Off.)
 
     -- side dropdown ---------------------------------------------------------
-    local sideLabel = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    sideLabel:SetPoint("TOPLEFT", glowTgl, "BOTTOMLEFT", 24, -22)
-    sideLabel:SetText("Anchor side")
+    -- Overlay anchor block. Left-aligned with the checkboxes above.
+    local sideLabel = content:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    sideLabel:SetPoint("TOPLEFT", glowTgl, "BOTTOMLEFT", 0, -22)
+    sideLabel:SetText("Overlay")
+    local sideLabel2 = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    sideLabel2:SetPoint("TOPLEFT", sideLabel, "BOTTOMLEFT", 0, -8)
+    sideLabel2:SetText("Anchor side")
 
     local sideDD = CreateFrame("DropdownButton", nil, content,"WowStyle1DropdownTemplate")
-    sideDD:SetPoint("LEFT", sideLabel, "RIGHT", 8, 0)
+    sideDD:SetPoint("LEFT", sideLabel2, "RIGHT", 8, 0)
     sideDD:SetWidth(120)
 
     local SIDES = { "BOTTOM", "TOP", "LEFT", "RIGHT" }
@@ -411,7 +417,7 @@ local function buildPanel()
         return s
     end
 
-    local sliderX = mkOffsetSlider(sideLabel, -28, "offsetX", "X offset", -200, 200)
+    local sliderX = mkOffsetSlider(sideLabel2, -28, "offsetX", "X offset", -200, 200)
     local sliderY = mkOffsetSlider(sliderX,   -22, "offsetY", "Y offset", -200, 200)
     local sliderSize = mkOffsetSlider(sliderY,    -22, "iconSize", "Overlay icon size", 16, 64)
     local sliderGap  = mkOffsetSlider(sliderSize, -22, "iconGap",  "Icon spacing",       0, 20)
@@ -419,7 +425,8 @@ local function buildPanel()
     -- test-mode toggle button (sits next to sliders)
     local testBtn = CreateFrame("Button", nil, content,"UIPanelButtonTemplate")
     testBtn:SetSize(140, 22)
-    testBtn:SetPoint("LEFT", sliderY, "RIGHT", 24, 0)
+    -- Place below the slider stack so the buttons aren't squeezed off the right edge.
+    testBtn:SetPoint("TOPLEFT", sliderGap, "BOTTOMLEFT", 0, -16)
     local function refreshTestBtn()
         local on = GBI.UnitOverlay and GBI.UnitOverlay.IsTestMode and GBI.UnitOverlay.IsTestMode()
         testBtn:SetText(on and "Test mode: ON" or "Test mode: OFF")
@@ -447,7 +454,7 @@ local function buildPanel()
 
     -- ============= 1.5 Bar appearance (per-window) ============= --
     local barHeader = content:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    barHeader:SetPoint("TOPLEFT", sliderGap, "BOTTOMLEFT", -24, -36)
+    barHeader:SetPoint("TOPLEFT", testBtn, "BOTTOMLEFT", 0, -28)
     barHeader:SetText("Bar appearance")
 
     local intFillBtn = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")

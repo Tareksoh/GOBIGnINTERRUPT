@@ -51,6 +51,8 @@ GBI.Cooldowns = {
 [19574]  = { name = "Bestial Wrath",       duration = 30, class = "HUNTER",      category = K.CAT_BIGCD, spec = {1}, auraAliases = { "Aspect of the Wild" } },  -- 12.0.5 BM redesign: static 30s (ORB's 90 is stale)
 [360952] = { name = "Coordinated Assault", duration = 120, class = "HUNTER",     category = K.CAT_BIGCD, spec = {3} },
 [121471] = { name = "Shadow Blades",       duration = 90, class = "ROGUE",       category = K.CAT_BIGCD, spec = {3} },  -- MiniCC (talented)
+[360194] = { name = "Deathmark",           duration = 120, class = "ROGUE",      category = K.CAT_BIGCD, spec = {1} },  -- Assassination
+[114018] = { name = "Shroud of Concealment", duration = 360, class = "ROGUE",   category = K.CAT_UTILITY },  -- talent / group stealth
 [13750]  = { name = "Adrenaline Rush",     duration = 180, class = "ROGUE",      category = K.CAT_BIGCD, spec = {2} },
 [10060]  = { name = "Power Infusion",      duration = 120, class = "PRIEST",     category = K.CAT_BIGCD },
 [228260] = { name = "Void Eruption",       duration = 120, class = "PRIEST",     category = K.CAT_BIGCD, spec = {3} },  -- MiniCC
@@ -73,6 +75,7 @@ GBI.Cooldowns = {
 [106951] = { name = "Berserk",             duration = 180, class = "DRUID",      category = K.CAT_BIGCD, spec = {2} },  -- OmniReborn base
 [194223] = { name = "Celestial Alignment", duration = 180, class = "DRUID",      category = K.CAT_BIGCD, spec = {1} },
 [191427] = { name = "Metamorphosis (Hav)", duration = 180, class = "DEMONHUNTER",category = K.CAT_BIGCD, spec = {1} },  -- OmniReborn base
+[1249625]= { name = "Zenith",              duration = 60,  class = "MONK",       category = K.CAT_BIGCD,     spec = {2}, chargesMax = 2 },  -- WW Monk; 2 charges
 [1217605]= { name = "Void Metamorphosis", duration = 120, class = "DEMONHUNTER",category = K.CAT_BIGCD, spec = {3},
               stackingResource = { auraID = 1225789, threshold = 50 }  -- charging aura on player; ready at 50
             },
