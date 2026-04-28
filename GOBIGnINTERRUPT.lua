@@ -99,12 +99,14 @@ local function detectContext()
     return "unknown"
 end
 
--- Decide whether the engine should be on. Context-gating removed — the
--- per-window show toggles (DB.show.interruptBar, DB.show.cooldownsMode)
--- now do all the "show this here, hide that there" decisions, so the
--- engine just tracks whenever the master enable is on.
+-- Decide whether the engine should be on. Active only in 5-man party
+-- content: player must be in a group of 2-5 (player + 1..4 others) and
+-- NOT in a raid. Solo and raid hide everything.
 local function shouldEnable(context)
-    return GOBIGnINTERRUPTDB.enabled and true or false
+    if not GOBIGnINTERRUPTDB.enabled then return false end
+    if IsInRaid and IsInRaid() then return false end
+    local n = GetNumGroupMembers and GetNumGroupMembers() or 0
+    return n >= 2 and n <= 5
 end
 
 function App.UpdateContext()
@@ -132,6 +134,7 @@ f:RegisterEvent("ADDON_LOADED")
 f:RegisterEvent("PLAYER_ENTERING_WORLD")
 f:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 f:RegisterEvent("CHALLENGE_MODE_START")
+f:RegisterEvent("GROUP_ROSTER_UPDATE")
 f:SetScript("OnEvent", function(_, event, arg1)
     if event == "ADDON_LOADED" then
         if arg1 ~= addonName then return end
@@ -141,7 +144,9 @@ f:SetScript("OnEvent", function(_, event, arg1)
     elseif event == "PLAYER_ENTERING_WORLD" then
         ensureDB()
         C_Timer.After(0.5, App.UpdateContext)
-    elseif event == "ZONE_CHANGED_NEW_AREA" or event == "CHALLENGE_MODE_START" then
+    elseif event == "ZONE_CHANGED_NEW_AREA"
+        or event == "CHALLENGE_MODE_START"
+        or event == "GROUP_ROSTER_UPDATE" then
         C_Timer.After(0.5, App.UpdateContext)
     end
 end)
