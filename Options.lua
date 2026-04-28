@@ -261,7 +261,9 @@ local function buildPanel()
     local enable      = mkToggle(subtitle,  -8, "enabled",    "Enable addon")
     local debugTgl    = mkToggle(enable,    -2, "debug",      "Debug logging")
     local lockTgl     = mkToggle(debugTgl,  -2, "locked",     "Lock anchor (cannot drag)")
-    local showAlways  = mkToggle(lockTgl,   -2, "showAlways", "Show outside dungeons too")
+    -- "Show outside dungeons" toggle removed. The engine now always tracks
+    -- when the addon is enabled; the show toggles below decide what's visible.
+    local showAlways = lockTgl     -- alias so downstream anchors still work
 
     local function mkShowToggle(parentRel, dy, key, labelText)
         local cb = CreateFrame("CheckButton", nil, content, "UICheckButtonTemplate")
@@ -279,7 +281,43 @@ local function buildPanel()
         return cb
     end
     local showInt = mkShowToggle(showAlways, -2, "interruptBar", "Show Interrupts bar")
-    local showCD  = mkShowToggle(showInt,    -2, "cooldownBar",  "Show Cooldowns bar / overlay")
+
+    -- Cooldowns mode dropdown — replaces the old "Show CD bar" + "Show
+    -- on party frames" pair which interacted confusingly.
+    local cdModeLbl = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    cdModeLbl:SetPoint("TOPLEFT", showInt, "BOTTOMLEFT", 4, -6)
+    cdModeLbl:SetText("Cooldowns display")
+    local cdModeDD = CreateFrame("DropdownButton", nil, content, "WowStyle1DropdownTemplate")
+    cdModeDD:SetPoint("LEFT", cdModeLbl, "RIGHT", 8, 0); cdModeDD:SetWidth(180)
+    local CD_MODES = {
+        { key = "bar",     label = "Bar window" },
+        { key = "overlay", label = "Party-frame overlay" },
+        { key = "off",     label = "Off" },
+    }
+    local function curCDMode()
+        local s = db().show or {}
+        if s.cooldownsMode then return s.cooldownsMode end
+        if s.cooldownBar == false then return "off" end
+        if (db().unitOverlay or {}).enabled then return "overlay" end
+        return "bar"
+    end
+    cdModeDD:SetupMenu(function(_, root)
+        for _, m in ipairs(CD_MODES) do
+            root:CreateRadio(m.label, function() return curCDMode() == m.key end, function()
+                db().show = db().show or {}
+                db().show.cooldownsMode = m.key
+                -- Mirror to legacy fields for back-compat.
+                db().show.cooldownBar = (m.key ~= "off")
+                db().unitOverlay = db().unitOverlay or {}
+                db().unitOverlay.enabled = (m.key == "overlay")
+                if GBI.Bar and GBI.Bar.RefreshLayout then GBI.Bar.RefreshLayout() end
+                cdModeDD:GenerateMenu()
+            end)
+        end
+    end)
+    cdModeDD:SetScript("OnShow", function() cdModeDD:GenerateMenu() end)
+    -- Make the next widget (overlayTgl) anchor below the dropdown row.
+    local showCD = cdModeDD
 
     local glowTgl = CreateFrame("CheckButton", nil, content, "UICheckButtonTemplate")
     glowTgl:SetPoint("TOPLEFT", showCD, "BOTTOMLEFT", 0, -2)
@@ -287,21 +325,12 @@ local function buildPanel()
     glowTgl:SetScript("OnShow", function(s) s:SetChecked(db().glow and true or false) end)
     glowTgl:SetScript("OnClick", function(s) db().glow = s:GetChecked() and true or false end)
 
-    local overlayTgl = CreateFrame("CheckButton", nil, content,"UICheckButtonTemplate")
-    overlayTgl:SetPoint("TOPLEFT", glowTgl, "BOTTOMLEFT", 0, -2)
-    cbLabel(overlayTgl):SetText("Show CDs on party frames (hides Cooldown window)")
-    overlayTgl:SetScript("OnShow", function(s)
-        s:SetChecked(db().unitOverlay and db().unitOverlay.enabled and true or false)
-    end)
-    overlayTgl:SetScript("OnClick", function(s)
-        db().unitOverlay = db().unitOverlay or {}
-        db().unitOverlay.enabled = s:GetChecked() and true or false
-        if GBI.Bar and GBI.Bar.RefreshLayout then GBI.Bar.RefreshLayout() end
-    end)
+    -- (Old "Show CDs on party frames" checkbox removed - unified into the
+    -- "Cooldowns display" dropdown above which has Bar / Overlay / Off.)
 
     -- side dropdown ---------------------------------------------------------
     local sideLabel = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    sideLabel:SetPoint("TOPLEFT", overlayTgl, "BOTTOMLEFT", 24, -8)
+    sideLabel:SetPoint("TOPLEFT", glowTgl, "BOTTOMLEFT", 24, -22)
     sideLabel:SetText("Anchor side")
 
     local sideDD = CreateFrame("DropdownButton", nil, content,"WowStyle1DropdownTemplate")

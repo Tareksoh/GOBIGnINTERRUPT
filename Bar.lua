@@ -689,9 +689,12 @@ local barInt = newBar({ key = "interrupts", title = "GBI Interrupts", defaultY =
 local barCD  = newBar({ key = "cooldowns",  title = "GBI Cooldowns",  defaultY = 60  })
 
 local function unitOverlayActive()
+    if not GBI.UnitOverlay then return false end
+    -- New schema first; legacy fallback.
+    local s = GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.show or {}
+    if s.cooldownsMode then return s.cooldownsMode == "overlay" end
     return GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.unitOverlay
-        and GOBIGnINTERRUPTDB.unitOverlay.enabled
-        and GBI.UnitOverlay
+        and GOBIGnINTERRUPTDB.unitOverlay.enabled and true or false
 end
 
 local function dispatch(state, fnName, unit, spellID)
@@ -729,19 +732,30 @@ local function showCfg()
     return (GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.show) or {}
 end
 
+-- Resolve the effective cooldowns mode. New schema: DB.show.cooldownsMode =
+-- "off" | "bar" | "overlay". For migration, fall back to the old fields
+-- (DB.show.cooldownBar / DB.unitOverlay.enabled) when the new field isn't set.
+local function cooldownsMode()
+    local s = showCfg()
+    if s.cooldownsMode then return s.cooldownsMode end
+    if s.cooldownBar == false then return "off" end
+    if GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.unitOverlay
+       and GOBIGnINTERRUPTDB.unitOverlay.enabled then return "overlay" end
+    return "bar"
+end
+
 function M.Show()
     local s = showCfg()
-    -- Interrupts bar
     if s.interruptBar ~= false then barInt.Show() else barInt.Hide() end
-    -- Cooldowns bar / overlay. cooldownBar == false hides BOTH; otherwise
-    -- pick between the bar window and the unit-frame overlay.
-    if s.cooldownBar == false then
+
+    local mode = cooldownsMode()
+    if mode == "off" then
         barCD.Hide()
         if GBI.UnitOverlay and GBI.UnitOverlay.Hide then GBI.UnitOverlay.Hide() end
-    elseif unitOverlayActive() then
+    elseif mode == "overlay" then
         barCD.Hide()
         if GBI.UnitOverlay and GBI.UnitOverlay.Show then GBI.UnitOverlay.Show() end
-    else
+    else  -- "bar"
         barCD.Show()
         if GBI.UnitOverlay and GBI.UnitOverlay.Hide then GBI.UnitOverlay.Hide() end
     end

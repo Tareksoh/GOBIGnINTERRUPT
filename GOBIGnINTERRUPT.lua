@@ -99,11 +99,12 @@ local function detectContext()
     return "unknown"
 end
 
--- Decide whether the engine should be on.
+-- Decide whether the engine should be on. Context-gating removed — the
+-- per-window show toggles (DB.show.interruptBar, DB.show.cooldownsMode)
+-- now do all the "show this here, hide that there" decisions, so the
+-- engine just tracks whenever the master enable is on.
 local function shouldEnable(context)
-    if not GOBIGnINTERRUPTDB.enabled then return false end
-    if GOBIGnINTERRUPTDB.showAlways then return true end
-    return context == "mythicplus" or context == "party"
+    return GOBIGnINTERRUPTDB.enabled and true or false
 end
 
 function App.UpdateContext()
