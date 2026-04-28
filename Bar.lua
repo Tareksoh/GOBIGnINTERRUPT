@@ -497,8 +497,12 @@ local function newBar(spec)
         for unit, list in pairs(self.icons) do
             for _, e in ipairs(list) do
                 e.icon:Hide()
+                if e.glowing then hideGlow(e.icon); e.glowing = false end
             end
-            self.icons[unit] = {}
+            -- Clear IN-PLACE — the bar's progBar.iconList holds a reference
+            -- to this table, so reassigning a new {} would orphan the bar
+            -- (zone change → bar OnUpdate iterates the dead old table).
+            for i = #list, 1, -1 do list[i] = nil end
         end
     end
 
