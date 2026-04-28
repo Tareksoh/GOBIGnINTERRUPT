@@ -106,7 +106,9 @@ local function newBar(spec)
 
     local function saved() return GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.bars and GOBIGnINTERRUPTDB.bars[spec.key] or {} end
     local function effIcon()    return math.floor(ICON_BASE * self.scale + 0.5) end
+    local PROG_BAR_H = 8                                  -- thin bar strip
     local function effRowH()
+        if spec.progressBar then return effIcon() + 4 + PROG_BAR_H + 1 end
         return effIcon() + 4
     end
     local function effPerRow()
@@ -116,7 +118,6 @@ local function newBar(spec)
     local function effGrowDir() return saved().growDir or "RIGHT" end
     local function effBarWidth() return saved().barWidth or 220 end
     local function effPanelW()
-        if spec.progressBar then return NAME_WIDTH + effBarWidth() + 16 end
         return NAME_WIDTH + effPerRow() * (effIcon() + ICON_GAP) + 16
     end
     local function effPanelH()  return 16 + #K.PARTY_UNITS * (effRowH() + ROW_GAP) end
@@ -127,93 +128,60 @@ local function newBar(spec)
         row:SetSize(effPanelW() - 16, effRowH())
         row:SetPoint("TOPLEFT", self.anchor, "TOPLEFT", 8, -8 - (idx - 1) * (effRowH() + ROW_GAP))
 
+        -- Row backdrop (translucent strip behind name + icons).
+        row.bg = row:CreateTexture(nil, "BACKGROUND")
+        row.bg:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+        row.bg:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0,
+            spec.progressBar and (PROG_BAR_H + 1) or 0)
+        row.bg:SetColorTexture(0, 0, 0, 0.35)
+
         if spec.progressBar then
-            -- Bar fills the right portion of the row; name strip sits to its left.
+            -- Thin progress bar at the bottom of the row tracking the
+            -- soonest-ending interrupt's remaining time. Decorative — the
+            -- icon grid above is the primary readout.
             local bar = CreateFrame("StatusBar", nil, row)
-            bar:SetPoint("LEFT", row, "LEFT", NAME_WIDTH, 0)
-            bar:SetPoint("RIGHT", row, "RIGHT", 0, 0)
-            bar:SetHeight(effIcon() + 4)
+            bar:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
+            bar:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
+            bar:SetHeight(PROG_BAR_H)
             bar:SetStatusBarTexture("Interface\\TARGETINGFRAME\\UI-StatusBar")
-            bar:SetStatusBarColor(0.15, 0.55, 0.85, 0.85)   -- neutral teal-blue, no class collision
+            bar:SetStatusBarColor(0.15, 0.55, 0.85, 0.85)
             bar:SetMinMaxValues(0, 1); bar:SetValue(0)
-            -- Direction: RIGHT = fill anchored left, empties from right (icons
-            -- start right, slide left as CD ticks). LEFT = mirror (SetReverseFill).
-            if effGrowDir() == "LEFT" then bar:SetReverseFill(true) else bar:SetReverseFill(false) end
-            local bg = bar:CreateTexture(nil, "BACKGROUND"); bg:SetAllPoints(bar)
-            bg:SetColorTexture(0, 0, 0, 0.45)
-            -- Countdown text comes from the icon's CooldownFrameTemplate
-            -- (OmniCC-compatible). No separate bar text — keeps the bar clean.
+            if effGrowDir() == "LEFT" then bar:SetReverseFill(true) end
+            local bbg = bar:CreateTexture(nil, "BACKGROUND"); bbg:SetAllPoints(bar)
+            bbg:SetColorTexture(0, 0, 0, 0.55)
             row.progBar = bar
-            row.bg = bg                              -- backwards compat
             bar:SetScript("OnUpdate", function(self, elapsed)
                 self.acc = (self.acc or 0) + elapsed
-                if self.acc < 0.05 then return end
+                if self.acc < 0.1 then return end
                 self.acc = 0
                 local now = GetTime()
-
-                -- Drive bar value off the soonest-ending icon (still the
-                -- main visual) and reposition every visible icon along
-                -- its own remaining-fraction so they ride the tick-down.
                 local soonestStart, soonestEnd
-                local barW = self:GetWidth()
-                local growLeft = effGrowDir() == "LEFT"
                 for _, e in ipairs(self.iconList or {}) do
-                    if e.icon:IsShown() then
-                        if e.endsAt and e.endsAt > now then
-                            -- Live: ride the fill edge.
-                            if not soonestEnd or e.endsAt < soonestEnd then
-                                soonestStart = e.startedAt or now
-                                soonestEnd   = e.endsAt
-                            end
-                            local total = math.max(0.1, e.endsAt - (e.startedAt or now))
-                            local rem = math.max(0, e.endsAt - now)
-                            local frac = rem / total
-                            e.icon:ClearAllPoints()
-                            if growLeft then
-                                e.icon:SetPoint("CENTER", self, "RIGHT", -frac * barW, 0)
-                            else
-                                e.icon:SetPoint("CENTER", self, "LEFT",  frac * barW, 0)
-                            end
-                        else
-                            -- Placeholder or ready: park at the "ready" end
-                            -- of the bar (frac=0 position — where a live icon
-                            -- ends up when its CD finishes).
-                            e.icon:ClearAllPoints()
-                            if growLeft then
-                                e.icon:SetPoint("CENTER", self, "RIGHT", 0, 0)
-                            else
-                                e.icon:SetPoint("CENTER", self, "LEFT",  0, 0)
-                            end
+                    if e.icon:IsShown() and e.endsAt and e.endsAt > now then
+                        if not soonestEnd or e.endsAt < soonestEnd then
+                            soonestStart = e.startedAt or now
+                            soonestEnd   = e.endsAt
                         end
                     end
                 end
-
                 if not soonestEnd or soonestEnd <= now then
                     self:SetValue(0); return
                 end
                 local total = math.max(0.1, soonestEnd - (soonestStart or now))
-                local rem = soonestEnd - now
                 self:SetMinMaxValues(0, total)
-                self:SetValue(rem)
+                self:SetValue(soonestEnd - now)
             end)
-        else
-            row.bg = row:CreateTexture(nil, "BACKGROUND")
-            row.bg:SetAllPoints(row)
-            row.bg:SetColorTexture(0, 0, 0, 0.35)
         end
 
+        -- Name strip on the LEFT (same for both bars now that the interrupt
+        -- bar uses the grid layout).
         row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        row.name:SetPoint("LEFT", row, "LEFT", 4, 0)
+        row.name:SetWidth(NAME_WIDTH)
+        row.name:SetJustifyH("LEFT")
         if spec.progressBar then
-            -- Name strip to the LEFT of the bar.
-            row.name:SetPoint("LEFT", row, "LEFT", 4, 0)
-            row.name:SetPoint("RIGHT", row.progBar, "LEFT", -4, 0)
-            row.name:SetJustifyH("RIGHT")
             local f, sz = row.name:GetFont()
             if f then row.name:SetFont(f, sz or 12, "OUTLINE") end
-        else
-            row.name:SetPoint("LEFT", row, "LEFT", 4, 0)
-            row.name:SetWidth(NAME_WIDTH)
-            row.name:SetJustifyH("LEFT")
         end
 
         self.rows[unit] = row
@@ -532,11 +500,11 @@ local function newBar(spec)
             local growLeft = effGrowDir() == "LEFT"
             for _, row in pairs(self.rows) do
                 if row.progBar then
-                    row.progBar:SetHeight(effIcon() + 4)
+                    row.progBar:SetHeight(PROG_BAR_H)
                     row.progBar:SetReverseFill(growLeft)
                 end
             end
-            return  -- bar OnUpdate handles icon positions per-frame
+            -- fall through to icon grid relayout (same as cooldown bar)
         end
         -- relayout visible icons in each row (with wrap + grow direction)
         for unit, list in pairs(self.icons) do
@@ -643,9 +611,7 @@ local function newBar(spec)
             hideGlow(entry.icon); entry.glowing = false
         end
 
-        if spec.progressBar then
-            -- Bar's OnUpdate positions icons along the fill edge; skip default layout.
-        else
+        do
             local visible = {}
             for _, e in ipairs(list) do
                 if e.icon:IsShown() then visible[#visible + 1] = e end
