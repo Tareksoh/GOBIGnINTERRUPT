@@ -36,7 +36,7 @@ local DEFAULTS = {
     show            = { interruptBar = true, cooldownBar = true },  -- per-window UI toggles
 }
 
-local SCHEMA_VERSION = 4
+local SCHEMA_VERSION = 5
 
 local function migrate()
     local db = GOBIGnINTERRUPTDB
@@ -67,6 +67,22 @@ local function migrate()
             db.bar = nil
         end
         db.unitOverlay = db.unitOverlay or { enabled = false }
+    end
+    if from < 5 then
+        -- v4 -> v5: unify show toggles into DB.show.cooldownsMode and clear
+        -- legacy fields so they don't drift apart.
+        db.show = db.show or {}
+        if db.show.cooldownsMode == nil then
+            if db.show.cooldownBar == false then
+                db.show.cooldownsMode = "off"
+            elseif db.unitOverlay and db.unitOverlay.enabled then
+                db.show.cooldownsMode = "overlay"
+            else
+                db.show.cooldownsMode = "bar"
+            end
+        end
+        db.show.cooldownBar = nil       -- legacy
+        if db.unitOverlay then db.unitOverlay.enabled = nil end
     end
     db.schemaVersion = SCHEMA_VERSION
 end

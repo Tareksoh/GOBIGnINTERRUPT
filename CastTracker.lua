@@ -49,7 +49,7 @@ f:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
     -- (or nil) for other party members, but the castGUID *string* still
     -- embeds the real spell ID at segment 6.
     -- castGUID format: Cast-<type>-<server>-<inst>-<zoneUID>-<spellID>-<counter>
-    local spellID = GBI.Taint.SafeSpellID(rawSpellID)
+    local spellID = GBI.Taint and GBI.Taint.SafeSpellID and GBI.Taint.SafeSpellID(rawSpellID) or nil
     if not spellID then
         -- raw arg3 was unusable (secret-tagged); recover spellID from
         -- castGUID segment 6. The GUID itself can be tagged so we first
@@ -104,7 +104,7 @@ f:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
 
     -- Spec filter: only fire if the unit's spec matches (when a spec list is given).
     if cd.spec then
-        local guid = GBI.Taint.SafeGUID(unit)
+        local guid = GBI.Taint and GBI.Taint.SafeGUID and GBI.Taint.SafeGUID(unit) or nil
         local spec = guid and GBI.Inspect.GetSpecByGUID(guid) or nil
         if spec and not tContains(cd.spec, spec) then
             log("Debug", "skip %d on %s (spec %d not in cd.spec)", spellID, unit, spec)

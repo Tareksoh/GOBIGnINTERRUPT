@@ -48,7 +48,7 @@ GBI.Cooldowns = {
 [231895] = { name = "Crusade",             duration = 120, class = "PALADIN",    category = K.CAT_BIGCD, spec = {3} },
 [255937] = { name = "Wake of Ashes",       duration = 30, class = "PALADIN",     category = K.CAT_BIGCD, spec = {3} },
 [288613] = { name = "Trueshot",            duration = 120, class = "HUNTER",     category = K.CAT_BIGCD, spec = {2} },
-[19574]  = { name = "Bestial Wrath",       duration = 30, class = "HUNTER",      category = K.CAT_BIGCD, spec = {1}, auraAliases = { "Aspect of the Wild" } },  -- 12.0.5 BM redesign: static 30s (ORB's 90 is stale)
+[19574]  = { name = "Bestial Wrath",       duration = 30, class = "HUNTER",      category = K.CAT_BIGCD, spec = {1} },  -- 12.0.5 BM redesign: static 30s (ORB's 90 is stale)
 [360952] = { name = "Coordinated Assault", duration = 120, class = "HUNTER",     category = K.CAT_BIGCD, spec = {3} },
 [121471] = { name = "Shadow Blades",       duration = 90, class = "ROGUE",       category = K.CAT_BIGCD, spec = {3} },  -- MiniCC (talented)
 [360194] = { name = "Deathmark",           duration = 120, class = "ROGUE",      category = K.CAT_BIGCD, spec = {1} },  -- Assassination
@@ -144,7 +144,8 @@ GBI.Cooldowns = {
 [115450] = { name = "Detox",               duration = 8,  class = "MONK",        category = K.CAT_DISPEL },
 [218164] = { name = "Detox (Brewmaster)",  duration = 8,  class = "MONK",        category = K.CAT_DISPEL, spec = {1} },
 [475] =    { name = "Remove Curse",        duration = 8,  class = "MAGE",        category = K.CAT_DISPEL },
-[527]   = nil,  -- (de-dup; already above)
+-- (Purify [527] is defined above as the Priest dispel; removed the dead
+-- "[527] = nil" line that was deleting it)
 
 [192058] = { name = "Capacitor Totem",     duration = 60, class = "SHAMAN",      category = K.CAT_UTILITY },
 [207684] = { name = "Sigil of Misery",     duration = 90, class = "DEMONHUNTER",category = K.CAT_UTILITY, spec = {2} },

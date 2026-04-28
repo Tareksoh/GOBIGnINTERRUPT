@@ -396,6 +396,7 @@ local function newBar(spec)
         for i = #list, 1, -1 do
             local x = list[i]
             if not expected[x.spellID] or (x.placeholder and not placeholdersOn) then
+                if x.glowing then hideGlow(x.icon); x.glowing = false end
                 x.icon:Hide()
                 table.remove(list, i)
             end
@@ -784,7 +785,9 @@ function M.TestInterruptFill(durationS)
             local list = barInt.icons and barInt.icons[unit] or {}
             for i = #list, 1, -1 do
                 if list[i].spellID == 6552 then
-                    list[i].icon:Hide()
+                    local e = list[i]
+                    if e.glowing then pcall(_G.ActionButton_HideOverlayGlow, e.icon); e.glowing = false end
+                    e.icon:Hide()
                     table.remove(list, i)
                 end
             end
