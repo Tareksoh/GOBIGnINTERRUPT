@@ -148,16 +148,19 @@ end
 
 -- Probe UnitCastingInfo's notInterruptible. Returns true if the cast is
 -- explicitly NOT interruptible. Tagged-boolean safe.
+-- UnitCastingInfo returns:
+--   name, displayedName, icon, startTimeMS, endTimeMS, isTradeskill,
+--   castID, notInterruptible, spellID, isEmpowered, numEmpowerStages
+-- We need return #8.
 local function castIsNotInterruptible(unit)
-    local function fetch()
-        local _, _, _, _, _, _, _, _, _, notInt = UnitCastingInfo(unit)
-        return notInt
-    end
-    local ok, notInt = pcall(fetch)
-    if not ok then
+    local ok, notInt = pcall(function()
+        local _, _, _, _, _, _, _, n = UnitCastingInfo(unit)
+        return n
+    end)
+    if not ok or notInt == nil then
         ok, notInt = pcall(function()
-            local _, _, _, _, _, _, _, _, _, n2 = UnitChannelInfo(unit)
-            return n2
+            local _, _, _, _, _, _, _, n = UnitChannelInfo(unit)
+            return n
         end)
     end
     if not ok or notInt == nil then return false end
