@@ -860,8 +860,94 @@ local function buildPanel()
         rebuildList()
     end)
 
-    -- Grow content height to fit Spell DB section
-    content:SetHeight(1500)
+    -- ============= 5. Profiles ============= --
+    local profHeader = content:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    profHeader:SetPoint("TOPLEFT", listScroll, "BOTTOMLEFT", 0, -190)
+    profHeader:SetText("Profiles")
+
+    local profDD = CreateFrame("DropdownButton", nil, content, "WowStyle1DropdownTemplate")
+    profDD:SetPoint("TOPLEFT", profHeader, "BOTTOMLEFT", 0, -8)
+    profDD:SetWidth(200)
+
+    local function refreshProfDD()
+        if profDD.GenerateMenu then profDD:GenerateMenu() end
+    end
+    profDD:SetupMenu(function(_, root)
+        local active = GBI.Profiles and GBI.Profiles.GetActiveName() or "Default"
+        for _, n in ipairs(GBI.Profiles and GBI.Profiles.List() or {}) do
+            root:CreateRadio(n, function() return active == n end, function()
+                if GBI.Profiles and GBI.Profiles.Load(n) then
+                    StaticPopup_Show("GBI_PROFILE_LOADED")
+                end
+                refreshProfDD()
+            end)
+        end
+    end)
+    profDD:SetScript("OnShow", refreshProfDD)
+
+    StaticPopupDialogs["GBI_PROFILE_LOADED"] = StaticPopupDialogs["GBI_PROFILE_LOADED"] or {
+        text = "Profile loaded. Reload UI to apply?",
+        button1 = "Reload", button2 = "Cancel",
+        OnAccept = ReloadUI, timeout = 0, hideOnEscape = true,
+    }
+
+    local nameEdit = CreateFrame("EditBox", nil, content, "InputBoxTemplate")
+    nameEdit:SetPoint("LEFT", profDD, "RIGHT", 16, 0)
+    nameEdit:SetSize(140, 22); nameEdit:SetAutoFocus(false); nameEdit:SetMaxLetters(32)
+
+    local function btn(parent, anchor, dx, label, w, click)
+        local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+        b:SetSize(w or 70, 22)
+        b:SetPoint("LEFT", anchor, "RIGHT", dx or 6, 0)
+        b:SetText(label)
+        b:SetScript("OnClick", click)
+        return b
+    end
+
+    local saveBtn = btn(content, nameEdit, 6, "Save", 70, function()
+        local n = nameEdit:GetText()
+        if not n or n == "" then return end
+        if GBI.Profiles and GBI.Profiles.Save(n) then
+            nameEdit:SetText("")
+            refreshProfDD()
+        end
+    end)
+    local delBtn = btn(content, saveBtn, 6, "Delete", 70, function()
+        local n = nameEdit:GetText()
+        if not n or n == "" then n = (GBI.Profiles and GBI.Profiles.GetActiveName()) end
+        if GBI.Profiles and GBI.Profiles.Delete(n) then
+            refreshProfDD()
+        end
+    end)
+
+    -- Import / export edit box.
+    local ioBox = CreateFrame("EditBox", nil, content, "InputBoxTemplate")
+    ioBox:SetPoint("TOPLEFT", profDD, "BOTTOMLEFT", 4, -28)
+    ioBox:SetSize(440, 22); ioBox:SetAutoFocus(false); ioBox:SetMaxLetters(0)
+
+    local exportBtn = btn(content, ioBox, 6, "Export", 70, function()
+        local n = nameEdit:GetText()
+        if not n or n == "" then n = (GBI.Profiles and GBI.Profiles.GetActiveName()) end
+        local s = GBI.Profiles and GBI.Profiles.Export(n)
+        if s then ioBox:SetText(s); ioBox:HighlightText() end
+    end)
+    btn(content, exportBtn, 6, "Import", 70, function()
+        local n = nameEdit:GetText()
+        if not n or n == "" then return end
+        local txt = ioBox:GetText()
+        if GBI.Profiles and GBI.Profiles.Import(n, txt) then
+            ioBox:SetText("")
+            refreshProfDD()
+        end
+    end)
+
+    local profHelp = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    profHelp:SetPoint("TOPLEFT", ioBox, "BOTTOMLEFT", 0, -4)
+    profHelp:SetText("Type a profile name, then Save. To Export, click Export — copy the text. To Import, paste in the box and click Import.")
+    profHelp:SetTextColor(0.7, 0.7, 0.7)
+
+    -- Grow content height to fit all sections
+    content:SetHeight(1700)
 
     -- Register
     category = Settings.RegisterCanvasLayoutCategory(panel, "GOBIGnINTERRUPT")

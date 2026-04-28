@@ -39,5 +39,6 @@ StackTracker.lua
 
 # Entry
 GOBIGnINTERRUPT.lua
+Profiles.lua
 Options.lua
 Slash.lua
