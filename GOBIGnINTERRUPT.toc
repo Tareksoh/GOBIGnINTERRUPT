@@ -25,7 +25,6 @@ Inspect.lua
 CastTracker.lua
 Brain.lua
 Evidence.lua
-CombatLog.lua
 Interrupt.lua
 
 # UI
