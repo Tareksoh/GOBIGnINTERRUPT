@@ -33,8 +33,8 @@ local DEFAULTS = {
     spellDb         = { disabled = {}, custom = {} },  -- user overrides
     comm            = { enabled = true },              -- peer CD-sharing broadcast
     placeholders    = { enabled = true },               -- spec-aware placeholder pre-population
-    show            = { interruptBar = true, cooldownBar = true },  -- per-window UI toggles
-    combatLog       = { enabled = true },               -- CLEU-based party CD detection
+    show            = { interruptBar = true },         -- per-window UI toggles
+                                                        -- (cooldownBar legacy; cooldownsMode set via migration v4->v5)
 }
 
 local SCHEMA_VERSION = 5

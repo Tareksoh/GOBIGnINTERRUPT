@@ -1,6 +1,6 @@
 -- Cooldown icons anchored to each party member's unit frame (OmniCD-style).
--- Active only when DB.unitOverlay.enabled is true; the cooldown bar window
--- hides itself when this is on.
+-- Active only when DB.show.cooldownsMode == "overlay"; the cooldown bar
+-- window (Bar.lua barCD) hides itself when this is on.
 --
 -- Anchor strategy (per unit):
 --   try CompactPartyFrameMember<n>  (Edit-mode raid-style party frames, default in TWW)

@@ -290,6 +290,13 @@ local function buildPanel()
             if dbKey == "locked" and GBI.Bar and GBI.Bar.RefreshLocked then
                 GBI.Bar.RefreshLocked()
             end
+            -- "Enable addon" toggle must re-run the context evaluation so
+            -- Bar.lua's engineEnabled gate updates immediately. Without
+            -- this, unticking left the bars visible until the next event
+            -- (PEW / ROSTER_UPDATE / ZONE_CHANGED) fired UpdateContext.
+            if dbKey == "enabled" and GBI.App and GBI.App.UpdateContext then
+                GBI.App.UpdateContext()
+            end
         end)
         return cb
     end
@@ -342,10 +349,9 @@ local function buildPanel()
             root:CreateRadio(m.label, function() return curCDMode() == m.key end, function()
                 db().show = db().show or {}
                 db().show.cooldownsMode = m.key
-                -- Mirror to legacy fields for back-compat.
-                db().show.cooldownBar = (m.key ~= "off")
-                db().unitOverlay = db().unitOverlay or {}
-                db().unitOverlay.enabled = (m.key == "overlay")
+                -- Legacy mirror to db().show.cooldownBar / db().unitOverlay.enabled
+                -- removed in v1.1.2 — those fields are nil'd by the v4->v5
+                -- migration and read paths prefer cooldownsMode anyway.
                 if GBI.Bar and GBI.Bar.RefreshLayout then GBI.Bar.RefreshLayout() end
                 cdModeDD:GenerateMenu()
             end)

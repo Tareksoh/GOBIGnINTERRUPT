@@ -5,9 +5,11 @@
 -- Each window has its own draggable anchor and saved position
 -- (DB.bars.interrupts / DB.bars.cooldowns).
 --
--- Cooldown window is hidden when DB.unitOverlay.enabled is true; the
+-- Cooldown window is hidden when DB.show.cooldownsMode == "overlay"; the
 -- UnitOverlay module then draws the cooldown icons on top of party frames.
--- Interrupt window is always shown when the engine is enabled.
+-- (cooldownsMode "off" hides both; "bar" shows the floating bar window.)
+-- Interrupt window is shown whenever the engine is enabled and
+-- DB.show.interruptBar ~= false.
 --
 -- Public API (back-compat with Brain.lua):
 --   GBI.Bar.OnCDStart(unit, spellID, state)   - dispatched by category
@@ -21,6 +23,14 @@ local GBI = GOBIGnINTERRUPT
 local K = GBI.K
 GBI.Bar = GBI.Bar or {}
 local M = GBI.Bar
+
+-- Last-known engine state. Set by SetEnabled (which App.UpdateContext calls
+-- after running shouldEnable). M.OnCDStart, M.OnCDReady, and RefreshLayout
+-- all consult this so an Options-panel toggle, a delayed cast event, or any
+-- show-path can't re-show the bars while the engine has decided we should
+-- be hidden (solo in a dungeon, in a raid, group size out of 2..5).
+-- MUST be declared before any function that references it (Lua lexical scope).
+local engineEnabled = false
 
 local ICON_BASE   = 32          -- base icon size before per-bar scale
 local ICON_GAP    = 4
@@ -279,6 +289,12 @@ local function newBar(spec)
         if self.anchor then return self.anchor end
         local frameName = "GOBIGnINTERRUPT_Anchor_" .. spec.key
         self.anchor = CreateFrame("Frame", frameName, UIParent, "BackdropTemplate")
+        -- Start hidden. CreateFrame produces visible frames by default; any
+        -- ensureAnchor caller that runs while the engine is off (e.g.
+        -- KickCounter.refresh on PLAYER_ENTERING_WORLD before
+        -- App.UpdateContext has had a chance to fire) would otherwise leak
+        -- a visible empty bar onscreen. self.Show() explicitly :Show()s it.
+        self.anchor:Hide()
         self.anchor:SetSize(effPanelW(), effPanelH())
         self.anchor:SetPoint("CENTER", UIParent, "CENTER", 0, spec.defaultY)
         self.anchor:SetMovable(true)
@@ -754,8 +770,20 @@ local function dispatch(state, fnName, unit, spellID)
     end
 end
 
-function M.OnCDStart(unit, spellID, state) dispatch(state, "OnCDStart", unit, spellID) end
-function M.OnCDReady(unit, spellID, state) dispatch(state, "OnCDReady", unit, spellID) end
+-- Gate UI visibility by the engine state. Without this, casts coming from
+-- CastTracker / Evidence / StackTracker / CDComm / delayed Brain timers can
+-- trigger ensureAnchor (which creates frames visible by default), leaking
+-- bars onscreen while the engine has decided we should be hidden (solo,
+-- raid, group out of 2..5). State stays tracked in Brain regardless; the
+-- next engine-on Show() will repaint from the next cast event.
+function M.OnCDStart(unit, spellID, state)
+    if not engineEnabled then return end
+    dispatch(state, "OnCDStart", unit, spellID)
+end
+function M.OnCDReady(unit, spellID, state)
+    if not engineEnabled then return end
+    dispatch(state, "OnCDReady", unit, spellID)
+end
 
 
 function M.Reset()
@@ -802,7 +830,10 @@ function M.Hide()
     if GBI.UnitOverlay and GBI.UnitOverlay.Hide then GBI.UnitOverlay.Hide() end
 end
 
-function M.SetEnabled(on) if on then M.Show() else M.Hide() end end
+function M.SetEnabled(on)
+    engineEnabled = on and true or false
+    if engineEnabled then M.Show() else M.Hide() end
+end
 
 function M.GetInterruptAnchor() barInt.ensureAnchor(); return barInt.anchor end
 
@@ -853,9 +884,12 @@ function M.ApplyAllBars()
     syncAndApply(barInt); syncAndApply(barCD)
 end
 
--- Re-evaluate cooldown-window vs unit-overlay when the option flips.
+-- Re-evaluate cooldown-window vs unit-overlay when an Options toggle
+-- changes show.cooldownsMode / show.interruptBar etc. Respects the engine
+-- gate: if SetEnabled(false) was the last decision, stay hidden — the
+-- toggle must not bypass shouldEnable.
 function M.RefreshLayout()
-    M.Show()    -- single source of truth for show/hide decisions
+    if engineEnabled then M.Show() else M.Hide() end
 end
 
 local rf = CreateFrame("Frame", "GOBIGnINTERRUPT_BarRosterFrame")

@@ -55,7 +55,11 @@ local function dispatch(msg)
     end
     if msg == "off" then
         GOBIGnINTERRUPTDB.enabled = false; say("OFF")
-        if GBI.Bar then GBI.Bar.Hide() end
+        -- Route through App.UpdateContext so engineEnabled in Bar.lua is
+        -- updated authoritatively. Calling Bar.Hide() directly leaves the
+        -- gate stale and lets a later RefreshLayout / option toggle re-show.
+        if GBI.App and GBI.App.UpdateContext then GBI.App.UpdateContext()
+        elseif GBI.Bar and GBI.Bar.SetEnabled then GBI.Bar.SetEnabled(false) end
         return
     end
     if msg == "debug" then
