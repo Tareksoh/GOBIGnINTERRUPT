@@ -636,7 +636,18 @@ local function newBar(spec)
                 hideGlow(entry.icon); entry.glowing = false
             end
         else
-            entry.cooldown:SetCooldown(state.startedAt, state.endsAt - state.startedAt)
+            -- Pass (now, remaining) instead of (startedAt, fullDuration) so the
+            -- swipe always works even when startedAt is in the past (back-calc
+            -- from Evidence's aura.expirationTime). Blizzard's Cooldown frame
+            -- has been observed mis-handling past start times in 12.0.5,
+            -- showing the swipe complete at half the actual remaining time.
+            local nowT = GetTime()
+            local rem = state.endsAt - nowT
+            if rem > 0 then
+                entry.cooldown:SetCooldown(nowT, rem)
+            else
+                entry.cooldown:SetCooldown(0, 0)
+            end
         end
         -- Charge / stack count overlay (bottom-right). Stacks (e.g. Devourer
         -- Meta resource toward 50) take priority over charges since stack
