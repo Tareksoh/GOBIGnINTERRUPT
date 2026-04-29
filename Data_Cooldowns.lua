@@ -84,7 +84,14 @@ GBI.Cooldowns = {
               auraAliases = { "Metamorphosis" }
             },  -- OmniReborn base
 [1249625]= { name = "Zenith",              duration = 60,  class = "MONK",       category = K.CAT_BIGCD,     spec = {2}, chargesMax = 2 },  -- WW Monk; 2 charges
-[1217605]= { name = "Void Metamorphosis", duration = 120, class = "DEMONHUNTER",category = K.CAT_BIGCD, spec = {3},
+[1217605]= { name = "Void Metamorphosis", duration = 120, class = "DEMONHUNTER",category = K.CAT_BIGCD,
+              -- No spec restriction: Devourer Hero Talent is selectable on
+              -- both Havoc and Vengeance, and the spell only triggers via
+              -- the stackingResource aura match (StackTracker, not spec).
+              -- An incorrect `spec = {3}` here caused PopulatePlaceholders'
+              -- prune to delete the live stack icon every time refreshNames
+              -- ran (any INSPECT_READY / GROUP_ROSTER_UPDATE), producing
+              -- random icon-disappear-then-reappear behavior on the bar.
               stackingResource = { auraID = 1225789, threshold = 50 }  -- charging aura on player; ready at 50
             },
 [370965] = { name = "The Hunt",            duration = 90, class = "DEMONHUNTER", category = K.CAT_BIGCD },

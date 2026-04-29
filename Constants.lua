@@ -30,12 +30,13 @@ K.ALL_CATEGORIES = {
 }
 
 -- Membership helper: is this category eligible for the cooldown bar /
--- unit overlay (i.e., big CD or defensive)? Excludes interrupt (handled
--- by its own bar), dispel, and utility.
+-- unit overlay? Everything except CAT_INTERRUPT (which has its own
+-- progress-bar window). The Spell DB UI's per-spell checkboxes are the
+-- granularity users curate; a coarse category filter here would silently
+-- override their explicit choices — e.g. ticking Leg Sweep (UTILITY) or
+-- a dispel had no effect because the bar refused the category.
 function K.IsCooldownBarCategory(cat)
-    return cat == K.CAT_BIGCD
-        or cat == K.CAT_OFFENSIVE
-        or cat == K.CAT_DEFENSIVE
+    return cat ~= nil and cat ~= K.CAT_INTERRUPT
 end
 
 -- Sound trigger categories (match Sounds.lua tagging) ---------------------

@@ -29,8 +29,13 @@ local function log(level, ...) if GBI.Log then GBI.Log[level]("comm", ...) end e
 -- and the UI flags them with a red "?".
 local peerSeen   = {}      -- [shortName] = GetTime() of last incoming msg
 local lastQueryAt = 0      -- GetTime() of our last broadcast Q
-local PEER_GRACE  = 5      -- seconds to wait for a response before "no addon"
-local PEER_STALE  = 60     -- seconds before we re-doubt a previously-seen peer
+local PEER_GRACE     = 5      -- seconds to wait for a Q response before "no addon"
+local PEER_STALE     = 600    -- seconds before we re-doubt a previously-seen peer.
+                              -- Long enough to survive low-activity stretches
+                              -- (boss mid-fight, sparse trash) — combined with
+                              -- the heartbeat Q below, peers stay marked HAS GBI
+                              -- as long as they're alive on addon-comm.
+local HEARTBEAT_INTERVAL = 60 -- seconds between proactive Q broadcasts
 
 local function enabled()
     -- Default ON: only disabled if user explicitly set comm.enabled = false.
@@ -141,7 +146,13 @@ end
 
 -- Reply to a Q with our current active CDs (one U message each, throttled
 -- via a tiny stagger so we don't flood the addon channel).
+--
+-- Always send a "P" presence ack first, regardless of active CDs — that's
+-- what refreshes peerSeen[us] on the requester's side. Without it, a peer
+-- with no active CDs replies with nothing, the requester's peerSeen ages
+-- out, and they re-flag us as "no addon" until the next Q-and-cast cycle.
 local function replyToQuery()
+    send("P")    -- presence ack (cheap; receiver's handler updates peerSeen)
     if not (GBI.Brain and GBI.Brain.GetPlayerActiveCDs) then return end
     local i = 0
     for sid, s in pairs(GBI.Brain.GetPlayerActiveCDs()) do
@@ -208,6 +219,7 @@ f:SetScript("OnEvent", function(_, event, prefix, msg, channel, sender)
         return
     end
     if event ~= "CHAT_MSG_ADDON" or prefix ~= PREFIX then return end
+    -- (heartbeat ticker installed below)
     log("Debug", "recv raw msg=%s sender=%s ch=%s", tostring(msg), tostring(sender), tostring(channel))
     if not enabled() then log("Debug", "  drop: comm disabled"); return end
 
@@ -271,6 +283,10 @@ f:SetScript("OnEvent", function(_, event, prefix, msg, channel, sender)
     elseif mt == "Q" then
         log("Debug", "recv Q from %s -> reply with active CDs", sender)
         replyToQuery()
+    elseif mt == "P" then
+        -- Presence ack: peerSeen[sender] was already refreshed in the
+        -- common code above. Nothing else to do; just don't log "unknown".
+        log("Debug", "recv P from %s -> presence ack", sender)
     elseif mt == "K" then
         local sid = tonumber(parts[2]); local n = tonumber(parts[3])
         if not sid or not n then return end
@@ -295,4 +311,17 @@ f:SetScript("OnEvent", function(_, event, prefix, msg, channel, sender)
     else
         log("Debug", "  drop: unknown msgType=%s", tostring(mt))
     end
+end)
+
+-- Heartbeat: while we're in a group, broadcast Q every HEARTBEAT_INTERVAL
+-- seconds. Receivers reply with "P" (presence ack) plus any active U
+-- messages, all of which refresh peerSeen[their_name] on our side. Without
+-- this, a peer who isn't casting tracked CDs goes silent on the addon
+-- channel, peerSeen ages out, and we re-flag them as "no addon".
+local heartbeat = CreateFrame("Frame", "GOBIGnINTERRUPT_CommHeartbeat")
+heartbeat:SetScript("OnUpdate", function(self, elapsed)
+    self.acc = (self.acc or 0) + elapsed
+    if self.acc < HEARTBEAT_INTERVAL then return end
+    self.acc = 0
+    if IsInGroup() and enabled() then M.SendQuery() end
 end)
