@@ -233,13 +233,19 @@ function M.OnCast(unit, spellID, cdEntry, overrideDuration, castedAt)
         GBI.CDComm.Broadcast(spellID, effDur, ch, chMax)
     end
 
-    -- schedule the end-of-cooldown event
-    local duration = effDur
+    -- schedule the end-of-cooldown event.
+    -- Use (endsAt - now), not effDur: when a cast was back-dated by Evidence
+    -- (aura.expirationTime - duration), endsAt is < now + effDur. Scheduling
+    -- the timer for the full effDur would fire late by however many seconds
+    -- the cast was back-dated, leaving inFlight, OnCDReady, and the
+    -- all-ready latch out of sync with the visual swipe (which uses endsAt
+    -- correctly via Bar.lua's SetCooldown(now, rem)).
     local sid      = spellID
     local u        = unit
     local endsAt   = state[unit][spellID].endsAt
+    local remaining = math.max(0.1, endsAt - GetTime())
 
-    C_Timer.After(duration, function()
+    C_Timer.After(remaining, function()
         local s = state[u] and state[u][sid]
         if not s then return end
         -- guard against re-cast: if endsAt drifted, this isn't the same
@@ -339,6 +345,9 @@ function M.UpdateRemaining(unit, spellID, remaining)
     if type(remaining) ~= "number" or remaining < 0 then return end
     local s = state[unit] and state[unit][spellID]
     if not s then return end
+    -- Stack-resource entries (Brain.SetStacks) leave endsAt = nil; D deltas
+    -- don't apply to them. Bail rather than crash on the math.abs below.
+    if type(s.endsAt) ~= "number" then return end
     local newEnds = GetTime() + remaining
     if math.abs(newEnds - s.endsAt) < 0.5 then return end   -- ignore noise
     s.endsAt = newEnds

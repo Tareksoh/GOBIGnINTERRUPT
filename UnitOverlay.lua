@@ -131,15 +131,32 @@ local function ensureContainer(unit)
         return c
     end
 
-    -- Build (or rebuild on host change).
+    -- Rebuild path (host changed or first build).
+    --
+    -- IMPORTANT: preserve the existing `c.icons` list across the rebuild.
+    -- Compact party frames can re-sort on roster updates, INSPECT_READY,
+    -- PLAYER_SPECIALIZATION_CHANGED, etc., which trips the rebind. The
+    -- old behavior was to wipe `c.icons` on rebuild — that erased every
+    -- live cooldown's state AND every placeholder until the next M.Show()
+    -- repopulated, which manifested as the overlay flickering empty and
+    -- live cooldowns "forgetting" they were on CD.
+    --
+    -- Instead, save the icon list, build a new container/tagFrame parented
+    -- to the new host, then reparent each existing icon onto the new
+    -- container. State (spellID, endsAt, placeholder, charges, ...) lives
+    -- on the entry table, not the parent, so reparenting preserves it.
+    local oldIcons = (c and c.icons) or {}
+
     if c and c.container then c.container:Hide(); c.container:SetParent(nil) end
+    if c and c.noAddonTag then c.noAddonTag:Hide(); c.noAddonTag:SetParent(nil) end
 
     local container = CreateFrame("Frame", nil, host)
     container:SetSize((MAX_ICONS * ICON_SIZE() + (MAX_ICONS - 1) * ICON_GAP()), ICON_SIZE())
     container:SetFrameStrata("HIGH")
     container:Show()
     M.ApplyAnchor(container, host)
-    log("Info", "container built unit=%s host=%s", unit, host:GetName() or "?")
+    log("Info", "container built unit=%s host=%s preservedIcons=%d",
+        unit, host:GetName() or "?", #oldIcons)
 
     -- "No addon" badge: red "?" anchored INSIDE the host frame, offset
     -- RIGHT from the TOPLEFT corner by half an icon width so it clears
@@ -160,8 +177,28 @@ local function ensureContainer(unit)
     tag:SetDrawLayer("OVERLAY", 7)
     tagFrame:Hide()
 
-    c = { container = container, host = host, icons = {}, noAddonTag = tagFrame }
+    -- Reparent every existing icon onto the new container so live state
+    -- and placeholders both survive the rebind. Cooldown frames are
+    -- children of the icon, so they ride along; defensively re-stamp
+    -- SetCooldown for entries with an active endsAt in case the reparent
+    -- reset the swipe.
+    local nowT = GetTime()
+    for _, e in ipairs(oldIcons) do
+        if e.icon then
+            e.icon:SetParent(container)
+            e.icon:ClearAllPoints()
+            e.icon:SetFrameStrata("HIGH")
+            e.icon:SetFrameLevel((container:GetFrameLevel() or 1) + 5)
+            if e.cooldown and type(e.endsAt) == "number" and e.endsAt > nowT then
+                e.cooldown:SetCooldown(nowT, e.endsAt - nowT)
+            end
+        end
+    end
+
+    c = { container = container, host = host, icons = oldIcons, noAddonTag = tagFrame }
     containers[unit] = c
+    -- Position the reparented icons; relayout reads c.icons.
+    if M._relayout then M._relayout(c) end
     return c
 end
 

@@ -55,12 +55,18 @@ GBI.Cooldowns = {
 [114018] = { name = "Shroud of Concealment", duration = 360, class = "ROGUE",   category = K.CAT_UTILITY },  -- talent / group stealth
 [13750]  = { name = "Adrenaline Rush",     duration = 180, class = "ROGUE",      category = K.CAT_BIGCD, spec = {2} },
 [10060]  = { name = "Power Infusion",      duration = 120, class = "PRIEST",     category = K.CAT_BIGCD },
-[228260] = { name = "Void Eruption",       duration = 120, class = "PRIEST",     category = K.CAT_BIGCD, spec = {3} },  -- MiniCC
+[228260] = { name = "Void Eruption",       duration = 120, class = "PRIEST",     category = K.CAT_BIGCD, spec = {3},
+              auraAliases = { "Voidform" }    -- the cast spell name differs from the visible buff
+            },  -- MiniCC
 [51271]  = { name = "Pillar of Frost",     duration = 45, class = "DEATHKNIGHT", category = K.CAT_BIGCD, spec = {2} },  -- MiniCC (talented)
 [42650]  = { name = "Army of the Dead",    duration = 180, class = "DEATHKNIGHT",category = K.CAT_BIGCD, spec = {3} },
 [275699] = { name = "Apocalypse",          duration = 75, class = "DEATHKNIGHT", category = K.CAT_BIGCD, spec = {3} },  -- not in ORB, kept base
-[114050] = { name = "Ascendance (Ele)",    duration = 180, class = "SHAMAN",     category = K.CAT_BIGCD, spec = {1} },
-[114051] = { name = "Ascendance (Enh)",    duration = 180, class = "SHAMAN",     category = K.CAT_BIGCD, spec = {2} },
+[114050] = { name = "Ascendance (Ele)",    duration = 180, class = "SHAMAN",     category = K.CAT_BIGCD, spec = {1},
+              auraAliases = { "Ascendance" }  -- buff name has no spec suffix
+            },
+[114051] = { name = "Ascendance (Enh)",    duration = 180, class = "SHAMAN",     category = K.CAT_BIGCD, spec = {2},
+              auraAliases = { "Ascendance" }
+            },
 [191634] = { name = "Stormkeeper",         duration = 60, class = "SHAMAN",      category = K.CAT_BIGCD, spec = {1} },
 [190319] = { name = "Combustion",          duration = 120, class = "MAGE",       category = K.CAT_BIGCD, spec = {2} },  -- OmniReborn base
 [12472]  = { name = "Icy Veins",           duration = 180, class = "MAGE",       category = K.CAT_BIGCD, spec = {3} },  -- OmniReborn
@@ -74,7 +80,9 @@ GBI.Cooldowns = {
 [391528] = { name = "Convoke the Spirits", duration = 120, class = "DRUID",      category = K.CAT_BIGCD },
 [106951] = { name = "Berserk",             duration = 180, class = "DRUID",      category = K.CAT_BIGCD, spec = {2} },  -- OmniReborn base
 [194223] = { name = "Celestial Alignment", duration = 180, class = "DRUID",      category = K.CAT_BIGCD, spec = {1} },
-[191427] = { name = "Metamorphosis (Hav)", duration = 180, class = "DEMONHUNTER",category = K.CAT_BIGCD, spec = {1} },  -- OmniReborn base
+[191427] = { name = "Metamorphosis (Hav)", duration = 180, class = "DEMONHUNTER",category = K.CAT_BIGCD, spec = {1},
+              auraAliases = { "Metamorphosis" }
+            },  -- OmniReborn base
 [1249625]= { name = "Zenith",              duration = 60,  class = "MONK",       category = K.CAT_BIGCD,     spec = {2}, chargesMax = 2 },  -- WW Monk; 2 charges
 [1217605]= { name = "Void Metamorphosis", duration = 120, class = "DEMONHUNTER",category = K.CAT_BIGCD, spec = {3},
               stackingResource = { auraID = 1225789, threshold = 50 }  -- charging aura on player; ready at 50
@@ -224,9 +232,13 @@ GBI.Cooldowns = {
 -- ========================= ADDED FROM InterruptTrack ========================
 
 [204021] = { name = "Fiery Brand",         duration = 60,  class = "DEMONHUNTER",category = K.CAT_DEFENSIVE, spec = {2} },
-[187827] = { name = "Metamorphosis (Veng)",duration = 120, class = "DEMONHUNTER",category = K.CAT_DEFENSIVE, spec = {2} },
+[187827] = { name = "Metamorphosis (Veng)",duration = 120, class = "DEMONHUNTER",category = K.CAT_DEFENSIVE, spec = {2},
+              auraAliases = { "Metamorphosis" }
+            },
 [209258] = { name = "Last Resort",         duration = 480, class = "DEMONHUNTER",category = K.CAT_DEFENSIVE, spec = {2} },
-[50334]  = { name = "Berserk (Guardian)",  duration = 180, class = "DRUID",      category = K.CAT_DEFENSIVE, spec = {3} },
+[50334]  = { name = "Berserk (Guardian)",  duration = 180, class = "DRUID",      category = K.CAT_DEFENSIVE, spec = {3},
+              auraAliases = { "Berserk" }
+            },
 [102342] = { name = "Ironbark",            duration = 90,  class = "DRUID",      category = K.CAT_DEFENSIVE, spec = {4} },
 [357170] = { name = "Time Dilation",       duration = 60,  class = "EVOKER",     category = K.CAT_DEFENSIVE, spec = {2} },
 [1250646]= { name = "Takedown",            duration = 60,  class = "HUNTER",     category = K.CAT_BIGCD,     spec = {3} },
@@ -235,13 +247,19 @@ GBI.Cooldowns = {
 [64843]  = { name = "Divine Hymn",         duration = 180, class = "PRIEST",     category = K.CAT_DEFENSIVE, spec = {2} },
 [47788]  = { name = "Guardian Spirit",     duration = 180, class = "PRIEST",     category = K.CAT_DEFENSIVE, spec = {2} },
 [185313] = { name = "Shadow Dance",        duration = 20,  class = "ROGUE",      category = K.CAT_BIGCD,     spec = {3} },
-[114052] = { name = "Ascendance (Resto)",  duration = 180, class = "SHAMAN",     category = K.CAT_DEFENSIVE, spec = {3} },
+[114052] = { name = "Ascendance (Resto)",  duration = 180, class = "SHAMAN",     category = K.CAT_DEFENSIVE, spec = {3},
+              auraAliases = { "Ascendance" }
+            },
 [118038] = { name = "Die by the Sword",    duration = 120, class = "WARRIOR",    category = K.CAT_DEFENSIVE, spec = {1} },
 [184364] = { name = "Enraged Regeneration",duration = 120, class = "WARRIOR",    category = K.CAT_DEFENSIVE, spec = {2} },
 
 -- Additional commonly-tracked CDs not in either source
 [216331] = { name = "Avenging Crusader",   duration = 60,  class = "PALADIN",    category = K.CAT_BIGCD,     spec = {1} },
-[342245] = { name = "Alter Time",          duration = 50,  class = "MAGE",       category = K.CAT_DEFENSIVE },
+-- 342245 ("Alter Time" 50s) was added speculatively as a Master-of-Time
+-- talented variant; it collides with 110909 by name+class so name-based
+-- detection (Evidence) is non-deterministic. Removed for now — re-add only
+-- after confirming the spell ID exists in the current build's spellbook.
+-- [342245] = { name = "Alter Time",          duration = 50,  class = "MAGE",       category = K.CAT_DEFENSIVE },
 [414659] = { name = "Ice Cold",            duration = 240, class = "MAGE",       category = K.CAT_DEFENSIVE },
 [204018] = { name = "Blessing of Spellwarding", duration = 180, class = "PALADIN",category = K.CAT_DEFENSIVE, spec = {2} },
 [119914] = { name = "Axe Toss",            duration = 24,  class = "WARLOCK",    category = K.CAT_INTERRUPT, spec = {2} },
@@ -270,7 +288,9 @@ GBI.Cooldowns = {
 [740]    = { name = "Tranquility",         duration = 180, class = "DRUID",      category = K.CAT_DEFENSIVE, spec = {4} },
 [29166]  = { name = "Innervate",           duration = 180, class = "DRUID",      category = K.CAT_UTILITY },
 [33891]  = { name = "Incarnation: Tree of Life", duration = 180, class = "DRUID",category = K.CAT_BIGCD,     spec = {4} },
-[102543] = { name = "Incarnation: Avatar of Ashamane", duration = 180, class = "DRUID", category = K.CAT_BIGCD, spec = {2} },
+[102543] = { name = "Incarnation: Avatar of Ashamane", duration = 180, class = "DRUID", category = K.CAT_BIGCD, spec = {2},
+              auraAliases = { "Incarnation: King of the Jungle" }   -- buff name differs from cast name
+            },
 [102558] = { name = "Incarnation: Guardian of Ursoc", duration = 180, class = "DRUID", category = K.CAT_BIGCD, spec = {3} },
 [102560] = { name = "Incarnation: Chosen of Elune", duration = 180, class = "DRUID", category = K.CAT_BIGCD, spec = {1} },
 

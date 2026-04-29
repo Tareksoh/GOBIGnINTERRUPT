@@ -21,6 +21,18 @@ local K = GBI.K
 
 local function log(level, ...) if GBI.Log then GBI.Log[level]("evidence", ...) end end
 
+-- Resolve a unit's specID for AuraMap.LookupByName. Returns nil when unknown.
+-- Player: GetSpecialization() (1..4). Party: from Inspect.GetSpecByGUID.
+local function unitSpec(unit)
+    if unit == "player" then
+        return GetSpecialization and GetSpecialization() or nil
+    end
+    local guid = GBI.Taint and GBI.Taint.SafeGUID and GBI.Taint.SafeGUID(unit) or nil
+    if not guid then return nil end
+    return GBI.Inspect and GBI.Inspect.GetSpecByGUID
+        and GBI.Inspect.GetSpecByGUID(guid) or nil
+end
+
 local f = CreateFrame("Frame", "GOBIGnINTERRUPT_EvidenceFrame")
 f:RegisterUnitEvent("UNIT_AURA",
     "player", "party1", "party2", "party3", "party4")
@@ -84,25 +96,48 @@ local function pollPartyAuras()
         if UnitExists(unit) then
             seenAuras[unit] = seenAuras[unit] or {}
             local _, classToken = UnitClass(unit)
+            -- M+ encounters apply Private Auras (encounter mechanics broadcast
+            -- on party members) at arbitrary slots. Reading those throws under
+            -- our pcall — but only THAT slot. Use a small consecutive-failure
+            -- counter to detect end-of-list (where aura is genuinely nil),
+            -- while skipping individual slots that trip the read. The old
+            -- behavior of `break` on the first throw missed every legit CD
+            -- buff sitting at higher slots than the private aura.
+            local consecutiveNil = 0
             for i = 1, 40 do
                 local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, unit, i, "HELPFUL")
-                if not ok or not aura then break end
-                local okN, name = pcall(function() return aura.name end)
-                if okN and type(name) == "string" then
-                    local last = seenAuras[unit][name]
-                    -- New aura, OR the same aura recently expired and was re-applied
-                    if not last or (now - last) > 5 then
-                        local sid = GBI.AuraMap and GBI.AuraMap.LookupByName
-                            and GBI.AuraMap.LookupByName(name, classToken)
-                        if sid then
-                            local cd = GBI.GetCooldown(sid)
-                            if cd then
-                                log("Debug", "poll-detect '%s' on %s -> %d", name, unit, sid)
-                                fire(unit, sid, cd, castedAtFromAura(aura))   -- routes through dedup
+                if not ok then
+                    -- Forbidden / private aura at this slot. Skip and keep
+                    -- iterating; reset the consecutive-nil counter since this
+                    -- isn't end-of-list, just an unreadable slot.
+                    log("Debug", "poll skip slot %d on %s (forbidden)", i, unit)
+                    consecutiveNil = 0
+                elseif not aura then
+                    -- Real end-of-list once we see two nils in a row (defensive
+                    -- against transient nil returns).
+                    consecutiveNil = consecutiveNil + 1
+                    if consecutiveNil >= 2 then break end
+                else
+                    consecutiveNil = 0
+                    local okN, name = pcall(function() return aura.name end)
+                    if okN and type(name) == "string" then
+                        local last = seenAuras[unit][name]
+                        -- New aura, OR the same aura recently expired and was re-applied
+                        if not last or (now - last) > 5 then
+                            local sid = GBI.AuraMap and GBI.AuraMap.LookupByName
+                                and GBI.AuraMap.LookupByName(name, classToken, unitSpec(unit))
+                            if sid then
+                                local cd = GBI.GetCooldown(sid)
+                                if cd then
+                                    local ca = castedAtFromAura(aura)
+                                    log("Debug", "poll-detect '%s' on %s -> %d castedAt=%s",
+                                        name, unit, sid, tostring(ca))
+                                    fire(unit, sid, cd, ca)   -- routes through dedup
+                                end
                             end
                         end
+                        seenAuras[unit][name] = now
                     end
-                    seenAuras[unit][name] = now
                 end
             end
         end
@@ -138,7 +173,7 @@ f:SetScript("OnEvent", function(_, event, unit, updateInfo)
             local okN, rawName = pcall(function() return aura.name end)
             if okN and type(rawName) == "string" then
                 local sidByName = GBI.AuraMap and GBI.AuraMap.LookupByName
-                    and GBI.AuraMap.LookupByName(rawName, classToken)
+                    and GBI.AuraMap.LookupByName(rawName, classToken, unitSpec(unit))
                 if sidByName then
                     local cdN = GBI.GetCooldown(sidByName)
                     if cdN then
