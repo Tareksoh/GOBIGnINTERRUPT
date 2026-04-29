@@ -114,7 +114,13 @@ end
 -- overrideDuration: when set (peer-comm path), use the sender's already-
 -- adjusted duration verbatim instead of running TalentSync.AdjustCD again.
 -- The sender already applied their own talent CDR.
-function M.OnCast(unit, spellID, cdEntry, overrideDuration)
+--
+-- castedAt: when set (Evidence aura path), back-date startedAt to the
+-- moment the cast actually happened (aura.expirationTime - aura.duration)
+-- so the remaining-CD shown for non-addon peers reflects the real timer
+-- instead of "full duration from when we first noticed". Only honored on
+-- non-peer paths and clamped to within the spell's effective duration.
+function M.OnCast(unit, spellID, cdEntry, overrideDuration, castedAt)
     if not unit or not spellID or not cdEntry then return end
     if cdEntry.stackingResource then
         M.FlashCast(unit, spellID)
@@ -152,11 +158,23 @@ function M.OnCast(unit, spellID, cdEntry, overrideDuration)
         end
     end
 
+    -- Back-dated start: if Evidence inferred the actual cast time from an
+    -- aura's expirationTime, accept it (clamped to within effDur of now) so
+    -- the icon shows the true remaining time instead of full duration.
+    -- Peer-comm path keeps `now` since the sender already reported `effDur`
+    -- as remaining-from-now.
+    local effStart = now
+    if not fromPeer and type(castedAt) == "number"
+        and castedAt > 0 and castedAt < now then
+        local oldest = now - effDur
+        if castedAt > oldest then effStart = castedAt end
+    end
+
     -- record CD state
     state[unit] = state[unit] or {}
     state[unit][spellID] = {
-        startedAt  = now,
-        endsAt     = now + effDur,
+        startedAt  = effStart,
+        endsAt     = effStart + effDur,
         cdEntry    = cdEntry,
         charges    = cdEntry.charges,       -- nil for non-charged spells
         chargesMax = cdEntry.chargesMax,
@@ -378,5 +396,6 @@ function M.Reset()
     burstPeakInFlight = 0
     if GBI.Bar and GBI.Bar.Reset then GBI.Bar.Reset() end
     if GBI.StackTracker and GBI.StackTracker.Reset then GBI.StackTracker.Reset() end
+    if GBI.CDComm and GBI.CDComm.ResetPeerPresence then GBI.CDComm.ResetPeerPresence() end
     log("Info", "state reset")
 end

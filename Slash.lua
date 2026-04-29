@@ -227,6 +227,34 @@ local function dispatch(msg)
         if GBI.KickCounter and GBI.KickCounter.Print then GBI.KickCounter.Print() end
         return
     end
+
+    if msg == "peers" then
+        if not (GBI.CDComm and GBI.CDComm.DumpPeerPresence) then
+            say("comm not loaded"); return
+        end
+        local d = GBI.CDComm.DumpPeerPresence()
+        if d.lastQueryAt == 0 then
+            say("Q never sent (peer presence: unknown for everyone)")
+        else
+            say(("last Q: %.1fs ago  (grace: 5s)"):format(d.secsSinceQuery or -1))
+        end
+        if #d.peers == 0 then
+            print("  (no party members detected)")
+        end
+        for _, p in ipairs(d.peers) do
+            local label
+            if p.hasAddon == true then
+                label = "|cff66ff66HAS GBI|r"
+                    .. (p.secsAgo and (" (last msg %.1fs ago)"):format(p.secsAgo) or "")
+            elseif p.hasAddon == false then
+                label = "|cffff3030NO GBI|r (would show \"?\" badge)"
+            else
+                label = "|cffaaaaaaUNKNOWN|r (still in grace)"
+            end
+            print(("  %s [%s]  %s"):format(p.name, p.unit, label))
+        end
+        return
+    end
     if msg == "kicks reset" then
         if GBI.KickCounter and GBI.KickCounter.Reset then GBI.KickCounter.Reset() end
         say("kick counter reset"); return

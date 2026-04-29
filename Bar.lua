@@ -206,6 +206,17 @@ local function newBar(spec)
             row.name:SetJustifyH("LEFT")
         end
 
+        -- "No addon" badge: red "?" rendered as a high-priority OVERLAY
+        -- font string. Visible when CDComm.PeerHasAddon(unit) returns false
+        -- (peer didn't respond to our addon-comm Q within the grace window).
+        -- Anchored to the LEFT edge of the unit name so it sits as a marker
+        -- without overlapping icons or the interrupt progress bar.
+        row.noAddonTag = row:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        row.noAddonTag:SetPoint("RIGHT", row.name, "LEFT", -2, 0)
+        row.noAddonTag:SetText("|cffff3030?|r")
+        row.noAddonTag:SetDrawLayer("OVERLAY", 7)
+        row.noAddonTag:Hide()
+
         self.rows[unit] = row
         self.icons[unit] = {}
         if row.progBar then row.progBar.iconList = self.icons[unit] end
@@ -446,6 +457,25 @@ local function newBar(spec)
             self.applyScale()
         end
     end
+
+    -- Refresh the per-row red "?" tag: shown when CDComm reports that the
+    -- party member has not responded to addon-comm (= no GOBIGnINTERRUPT).
+    -- Cheap: O(party size) and runs on the same 0.5s tick as expireIcons.
+    local function refreshNoAddonTags()
+        if not GBI.CDComm or not GBI.CDComm.PeerHasAddon then return end
+        for _, unit in ipairs(K.PARTY_UNITS) do
+            local row = self.rows[unit]
+            if row and row.noAddonTag then
+                local has = GBI.CDComm.PeerHasAddon(unit)
+                if UnitExists(unit) and has == false then
+                    row.noAddonTag:Show()
+                else
+                    row.noAddonTag:Hide()
+                end
+            end
+        end
+    end
+    self.refreshNoAddonTags = refreshNoAddonTags
 
     local function expireIcons()
         local now = GetTime()
@@ -833,4 +863,6 @@ tk:SetScript("OnUpdate", function(self, elapsed)
     if self.acc < 0.5 then return end
     self.acc = 0
     barInt.expireIcons(); barCD.expireIcons()
+    if barInt.refreshNoAddonTags then barInt.refreshNoAddonTags() end
+    if barCD.refreshNoAddonTags  then barCD.refreshNoAddonTags()  end
 end)

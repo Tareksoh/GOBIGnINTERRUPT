@@ -246,6 +246,77 @@ GBI.Cooldowns = {
 [204018] = { name = "Blessing of Spellwarding", duration = 180, class = "PALADIN",category = K.CAT_DEFENSIVE, spec = {2} },
 [119914] = { name = "Axe Toss",            duration = 24,  class = "WARLOCK",    category = K.CAT_INTERRUPT, spec = {2} },
 
+-- ========================= AURA-MATCHING AUDIT (v0.6 batch) ================
+-- Major CDs with visible auras so Evidence detects them for non-addon peers.
+
+-- Warrior
+[228920] = { name = "Ravager",             duration = 90,  class = "WARRIOR",    category = K.CAT_BIGCD,     spec = {1} },
+[227847] = { name = "Bladestorm",          duration = 90,  class = "WARRIOR",    category = K.CAT_BIGCD,     spec = {1} },  -- Arms
+[46924]  = { name = "Bladestorm",          duration = 90,  class = "WARRIOR",    category = K.CAT_BIGCD,     spec = {2} },  -- Fury
+[376079] = { name = "Champion's Spear",    duration = 60,  class = "WARRIOR",    category = K.CAT_BIGCD,     spec = {1,2} },
+[1160]   = { name = "Demoralizing Shout",  duration = 90,  class = "WARRIOR",    category = K.CAT_DEFENSIVE, spec = {3} },
+
+-- Death Knight
+[47568]  = { name = "Empower Rune Weapon", duration = 120, class = "DEATHKNIGHT",category = K.CAT_BIGCD,     spec = {2} },
+[49028]  = { name = "Dancing Rune Weapon", duration = 120, class = "DEATHKNIGHT",category = K.CAT_DEFENSIVE, spec = {1} },
+[49039]  = { name = "Lichborne",           duration = 120, class = "DEATHKNIGHT",category = K.CAT_DEFENSIVE },
+[51052]  = { name = "Anti-Magic Zone",     duration = 120, class = "DEATHKNIGHT",category = K.CAT_DEFENSIVE },
+
+-- Demon Hunter
+[207407] = { name = "Soul Carver",         duration = 60,  class = "DEMONHUNTER",category = K.CAT_BIGCD,     spec = {2} },
+[258920] = { name = "Immolation Aura",     duration = 30,  class = "DEMONHUNTER",category = K.CAT_OFFENSIVE },
+
+-- Druid
+[740]    = { name = "Tranquility",         duration = 180, class = "DRUID",      category = K.CAT_DEFENSIVE, spec = {4} },
+[29166]  = { name = "Innervate",           duration = 180, class = "DRUID",      category = K.CAT_UTILITY },
+[33891]  = { name = "Incarnation: Tree of Life", duration = 180, class = "DRUID",category = K.CAT_BIGCD,     spec = {4} },
+[102543] = { name = "Incarnation: Avatar of Ashamane", duration = 180, class = "DRUID", category = K.CAT_BIGCD, spec = {2} },
+[102558] = { name = "Incarnation: Guardian of Ursoc", duration = 180, class = "DRUID", category = K.CAT_BIGCD, spec = {3} },
+[102560] = { name = "Incarnation: Chosen of Elune", duration = 180, class = "DRUID", category = K.CAT_BIGCD, spec = {1} },
+
+-- Evoker
+[363534] = { name = "Rewind",              duration = 240, class = "EVOKER",     category = K.CAT_DEFENSIVE, spec = {2} },
+[370553] = { name = "Tip the Scales",      duration = 120, class = "EVOKER",     category = K.CAT_BIGCD },
+
+-- Hunter
+[131894] = { name = "A Murder of Crows",   duration = 60,  class = "HUNTER",     category = K.CAT_OFFENSIVE, spec = {1,2} },
+[260402] = { name = "Double Tap",          duration = 60,  class = "HUNTER",     category = K.CAT_OFFENSIVE, spec = {2} },
+
+-- Mage
+[235219] = { name = "Cold Snap",           duration = 480, class = "MAGE",       category = K.CAT_UTILITY,   spec = {3} },
+[12051]  = { name = "Evocation",           duration = 90,  class = "MAGE",       category = K.CAT_UTILITY,   spec = {1} },
+
+-- Monk
+[115310] = { name = "Revival",             duration = 180, class = "MONK",       category = K.CAT_DEFENSIVE, spec = {2} },
+[322507] = { name = "Celestial Brew",      duration = 60,  class = "MONK",       category = K.CAT_DEFENSIVE, spec = {1} },
+[122278] = { name = "Dampen Harm",         duration = 120, class = "MONK",       category = K.CAT_DEFENSIVE },
+
+-- Paladin
+[105809] = { name = "Holy Avenger",        duration = 180, class = "PALADIN",    category = K.CAT_BIGCD,     spec = {1,3} },
+[31821]  = { name = "Aura Mastery",        duration = 180, class = "PALADIN",    category = K.CAT_DEFENSIVE, spec = {1} },
+
+-- Priest
+[15286]  = { name = "Vampiric Embrace",    duration = 120, class = "PRIEST",     category = K.CAT_DEFENSIVE, spec = {3} },
+[200183] = { name = "Apotheosis",          duration = 120, class = "PRIEST",     category = K.CAT_BIGCD,     spec = {2} },
+[64901]  = { name = "Symbol of Hope",      duration = 300, class = "PRIEST",     category = K.CAT_UTILITY },
+[47536]  = { name = "Rapture",             duration = 90,  class = "PRIEST",     category = K.CAT_DEFENSIVE, spec = {1} },
+
+-- Rogue
+[382245] = { name = "Cold Blood",          duration = 60,  class = "ROGUE",      category = K.CAT_OFFENSIVE, spec = {2,3} },
+[51690]  = { name = "Killing Spree",       duration = 120, class = "ROGUE",      category = K.CAT_BIGCD,     spec = {2} },
+
+-- Shaman
+[198103] = { name = "Earth Elemental",     duration = 300, class = "SHAMAN",     category = K.CAT_DEFENSIVE },
+[198067] = { name = "Fire Elemental",      duration = 150, class = "SHAMAN",     category = K.CAT_BIGCD,     spec = {1} },
+[192249] = { name = "Storm Elemental",     duration = 150, class = "SHAMAN",     category = K.CAT_BIGCD,     spec = {1} },
+[108280] = { name = "Healing Tide Totem",  duration = 180, class = "SHAMAN",     category = K.CAT_DEFENSIVE, spec = {3} },
+[98008]  = { name = "Spirit Link Totem",   duration = 180, class = "SHAMAN",     category = K.CAT_DEFENSIVE, spec = {3} },
+
+-- Warlock
+[113860] = { name = "Dark Soul: Misery",   duration = 120, class = "WARLOCK",    category = K.CAT_BIGCD,     spec = {1} },
+[113858] = { name = "Dark Soul: Instability", duration = 120, class = "WARLOCK", category = K.CAT_BIGCD,     spec = {3} },
+[1122]   = { name = "Summon Infernal",     duration = 180, class = "WARLOCK",    category = K.CAT_BIGCD,     spec = {3} },
+
 }
 
 -- Flat lookup helper. Given a spellID (already laundered via Taint.SafeSpellID),

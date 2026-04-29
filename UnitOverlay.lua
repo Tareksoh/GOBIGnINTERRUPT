@@ -141,7 +141,26 @@ local function ensureContainer(unit)
     M.ApplyAnchor(container, host)
     log("Info", "container built unit=%s host=%s", unit, host:GetName() or "?")
 
-    c = { container = container, host = host, icons = {} }
+    -- "No addon" badge: red "?" anchored INSIDE the host frame, offset
+    -- RIGHT from the TOPLEFT corner by half an icon width so it clears
+    -- the leader-crown / portrait area without sitting too far in.
+    -- TOPRIGHT is already taken by Blizzard's role icon. Visible when
+    -- CDComm.PeerHasAddon returns false for this unit.
+    local tagFrame = CreateFrame("Frame", nil, host)
+    tagFrame:SetSize(18, 18)
+    tagFrame:SetPoint("TOPLEFT", host, "TOPLEFT", ICON_SIZE() / 2, -2)
+    tagFrame:SetFrameStrata("HIGH")
+    tagFrame:SetFrameLevel((host:GetFrameLevel() or 1) + 8)
+    local plate = tagFrame:CreateTexture(nil, "BACKGROUND")
+    plate:SetAllPoints(tagFrame)
+    plate:SetColorTexture(0, 0, 0, 0.6)
+    local tag = tagFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    tag:SetPoint("CENTER", tagFrame, "CENTER", 0, 0)
+    tag:SetText("|cffff3030?|r")
+    tag:SetDrawLayer("OVERLAY", 7)
+    tagFrame:Hide()
+
+    c = { container = container, host = host, icons = {}, noAddonTag = tagFrame }
     containers[unit] = c
     return c
 end
@@ -336,6 +355,7 @@ function M.Hide()
     visible = false
     for _, c in pairs(containers) do
         if c.container then c.container:Hide() end
+        if c.noAddonTag then c.noAddonTag:Hide() end
     end
 end
 
@@ -429,6 +449,20 @@ tk:SetScript("OnUpdate", function(self, elapsed)
     if visible then
         for _, unit in ipairs(K.PARTY_UNITS) do
             if UnitExists(unit) then ensureContainer(unit) end
+        end
+    end
+
+    -- Refresh the red "?" no-addon badge for each container.
+    if visible and GBI.CDComm and GBI.CDComm.PeerHasAddon then
+        for unit, c in pairs(containers) do
+            if c.noAddonTag then
+                local has = GBI.CDComm.PeerHasAddon(unit)
+                if UnitExists(unit) and has == false then
+                    c.noAddonTag:Show()
+                else
+                    c.noAddonTag:Hide()
+                end
+            end
         end
     end
 

@@ -23,6 +23,15 @@ local M = GBI.CDComm
 local PREFIX = "GBINT"
 local function log(level, ...) if GBI.Log then GBI.Log[level]("comm", ...) end end
 
+-- Peer presence detection. Any inbound addon message confirms the sender
+-- has GOBIGnINTERRUPT installed. We send Q on roster updates; if a peer
+-- doesn't respond within a grace period, PeerHasAddon(unit) returns false
+-- and the UI flags them with a red "?".
+local peerSeen   = {}      -- [shortName] = GetTime() of last incoming msg
+local lastQueryAt = 0      -- GetTime() of our last broadcast Q
+local PEER_GRACE  = 5      -- seconds to wait for a response before "no addon"
+local PEER_STALE  = 60     -- seconds before we re-doubt a previously-seen peer
+
 local function enabled()
     -- Default ON: only disabled if user explicitly set comm.enabled = false.
     local c = GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.comm
@@ -78,7 +87,56 @@ end
 -- Late-join query: ask peers for their active CDs.
 function M.SendQuery()
     log("Debug", "send Q")
+    lastQueryAt = GetTime()
     return send("Q")
+end
+
+-- Public: does this party unit run GOBIGnINTERRUPT?
+--   true  - we received an addon message from them recently
+--   false - we sent Q at least PEER_GRACE seconds ago and never heard back
+--   nil   - too soon to tell, or unit doesn't exist
+function M.PeerHasAddon(unit)
+    if not unit or not UnitExists(unit) then return nil end
+    -- player always "has" the addon (it's us).
+    if unit == "player" or UnitIsUnit(unit, "player") then return true end
+    local name = UnitName(unit)
+    if not name then return nil end
+    local seen = peerSeen[name]
+    if seen and (GetTime() - seen) < PEER_STALE then return true end
+    if lastQueryAt > 0 and (GetTime() - lastQueryAt) > PEER_GRACE then return false end
+    return nil
+end
+
+-- Test/diag: drop everything we know about peer presence.
+function M.ResetPeerPresence()
+    peerSeen = {}
+    lastQueryAt = 0
+end
+
+-- Diagnostic: dump current peer-presence state.
+-- Returns { lastQueryAt, secsSinceQuery, peers = { {name, unit, hasAddon, secsAgo}, ... } }
+function M.DumpPeerPresence()
+    local now = GetTime()
+    local out = {
+        lastQueryAt    = lastQueryAt,
+        secsSinceQuery = lastQueryAt > 0 and (now - lastQueryAt) or nil,
+        peers = {},
+    }
+    for i = 1, 4 do
+        local u = "party" .. i
+        if UnitExists(u) then
+            local name = UnitName(u) or "?"
+            local seen = peerSeen[name]
+            local has = M.PeerHasAddon(u)
+            table.insert(out.peers, {
+                name    = name,
+                unit    = u,
+                hasAddon = has,
+                secsAgo = seen and (now - seen) or nil,
+            })
+        end
+    end
+    return out
 end
 
 -- Reply to a Q with our current active CDs (one U message each, throttled
@@ -164,6 +222,13 @@ f:SetScript("OnEvent", function(_, event, prefix, msg, channel, sender)
     local unit = senderToUnit(sender)
     if not unit then
         log("Debug", "  drop: senderToUnit nil for %s", tostring(sender)); return
+    end
+
+    -- Mark sender as an addon user (any valid inbound message proves it).
+    -- Use the short name so it lines up with UnitName(unit) in PeerHasAddon.
+    do
+        local short = sender and (sender:match("^([^%-]+)") or sender) or nil
+        if short then peerSeen[short] = GetTime() end
     end
 
     if mt == "U" then

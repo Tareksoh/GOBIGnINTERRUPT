@@ -38,54 +38,45 @@ f:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
     -- arg1 = unit, arg2 = castGUID, arg3 = spellID (potentially secret)
     local unit = arg1
     local rawSpellID = arg3
-
-    -- VERBOSE: every event that reaches us, before any filter.
-    log("Debug", "raw UNIT_SPELLCAST_SUCCEEDED unit=%s castGUID=%s rawSpell=%s",
-        tostring(unit), tostring(arg2), tostring(rawSpellID))
-
     if not K.PARTY_UNITS_SET[unit] then return end
 
     -- Recovery path for the 12.0.5 redaction: arg3 returns a fake/derived ID
-    -- (or nil) for other party members, but the castGUID *string* still
+    -- (or nil) for other party members, but the castGUID *string* sometimes
     -- embeds the real spell ID at segment 6.
     -- castGUID format: Cast-<type>-<server>-<inst>-<zoneUID>-<spellID>-<counter>
+    --
+    -- For tagged casts, both arg3 AND the castGUID are typically tagged in
+    -- 12.0.5 — string.match on a tagged string throws under pcall. We
+    -- detect that case via IsSecret and silently fall back to Evidence
+    -- (UNIT_AURA-based detection) instead of spamming the debug log.
     local spellID = GBI.Taint and GBI.Taint.SafeSpellID and GBI.Taint.SafeSpellID(rawSpellID) or nil
-    if not spellID then
-        -- raw arg3 was unusable (secret-tagged); recover spellID from
-        -- castGUID segment 6. The GUID itself can be tagged so we first
-        -- launder it via string.format("%s") (C-level, drops the taint
-        -- marker), then pcall the match in case format itself failed.
-        local castGUID = arg2
-        if type(castGUID) == "string" then
-            local cleanGUID
-            local okF, formatted = pcall(string.format, "%s", castGUID)
-            if okF and type(formatted) == "string" then
-                cleanGUID = formatted
-            else
-                local okT, t = pcall(tostring, castGUID)
-                if okT and type(t) == "string" then cleanGUID = t end
-            end
-            if cleanGUID then
-                local okM, m = pcall(string.match, cleanGUID,
-                    "^Cast%-%d+%-%d+%-%d+%-%d+%-(%d+)%-")
-                local fromGUID = okM and tonumber(m) or nil
-                if fromGUID then
-                    log("Debug", "  recovered spell %d from castGUID (arg3 was %s)",
-                        fromGUID, tostring(rawSpellID))
-                    spellID = fromGUID
-                else
-                    -- Don't index the GUID string for logging; it may also
-                    -- be tagged. Just note that match failed.
-                    log("Debug", "  match failed: ok=%s m=%s",
-                        tostring(okM), tostring(m))
-                end
+    local guidTagged = false
+    if not spellID and type(arg2) == "string" then
+        if GBI.Taint and GBI.Taint.IsSecret and GBI.Taint.IsSecret(arg2) then
+            guidTagged = true
+        else
+            -- Untagged castGUID — try to extract spell ID from segment 6.
+            local okM, m = pcall(string.match, arg2,
+                "^Cast%-%d+%-%d+%-%d+%-%d+%-(%d+)%-")
+            local fromGUID = okM and tonumber(m) or nil
+            if fromGUID then
+                log("Debug", "recovered spell %d from castGUID (arg3 was %s)",
+                    fromGUID, tostring(rawSpellID))
+                spellID = fromGUID
             end
         end
     end
 
     if not spellID then
-        log("Debug", "  skip: cannot resolve spellID for %s (raw=%s, castGUID=%s)",
-            unit, tostring(rawSpellID), tostring(arg2))
+        if guidTagged then
+            -- Expected for non-addon peer casts in 12.0.5. Evidence handles
+            -- detection via aura name; quiet log line just so it shows up
+            -- if you're tracing why a particular spell didn't fire.
+            log("Debug", "skip: tagged cast on %s (Evidence will catch via aura)", unit)
+        else
+            log("Debug", "skip: cannot resolve spellID for %s (raw=%s)",
+                unit, tostring(rawSpellID))
+        end
         return
     end
 

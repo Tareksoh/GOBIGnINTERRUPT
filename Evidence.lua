@@ -25,15 +25,46 @@ local f = CreateFrame("Frame", "GOBIGnINTERRUPT_EvidenceFrame")
 f:RegisterUnitEvent("UNIT_AURA",
     "player", "party1", "party2", "party3", "party4")
 
-local function fire(unit, spellID, cd)
+-- Back-calculate when the cast actually happened from an aura's
+-- expirationTime - duration.
+--
+-- 12.0.5 IS tagging aura.duration / aura.expirationTime as secret values
+-- on remote-PC party members. tonumber() alone does NOT strip the taint —
+-- the resulting number still throws on comparison. We must launder via
+-- tostring → tonumber to break the secret-tag chain (per the secret-values
+-- guidance in MEMORY.md). Wrap every step in pcall as belt-and-braces so
+-- a single weird aura never spams the bug-grabber.
+local function castedAtFromAura(aura)
+    if not aura then return nil end
+    local okExp, expRaw = pcall(function() return aura.expirationTime end)
+    local okDur, durRaw = pcall(function() return aura.duration end)
+    if not (okExp and okDur) then return nil end
+    -- Launder: tostring breaks the taint, tonumber re-types.
+    local okL, exp, dur = pcall(function()
+        return tonumber(tostring(expRaw)), tonumber(tostring(durRaw))
+    end)
+    if not okL or not exp or not dur then return nil end
+    -- Compare under pcall too — if any value still carries taint, fail closed.
+    local okCmp, ca = pcall(function()
+        if dur <= 0 or exp <= 0 then return nil end
+        local v = exp - dur
+        if v <= 0 or v > GetTime() + 0.1 then return nil end
+        return v
+    end)
+    if not okCmp then return nil end
+    return ca
+end
+
+local function fire(unit, spellID, cd, castedAt)
     local existing = GBI.Brain and GBI.Brain.GetState
         and GBI.Brain.GetState(unit, spellID)
     if existing and existing.endsAt and existing.endsAt > GetTime() + 1 then
         return  -- already tracked as live
     end
-    log("Debug", "evidence aura %d (%s) on %s", spellID, cd.name, unit)
+    log("Debug", "evidence aura %d (%s) on %s castedAt=%s",
+        spellID, cd.name, unit, tostring(castedAt))
     if GBI.Brain and GBI.Brain.OnCast then
-        GBI.Brain.OnCast(unit, spellID, cd)
+        GBI.Brain.OnCast(unit, spellID, cd, nil, castedAt)
     end
 end
 
@@ -67,7 +98,7 @@ local function pollPartyAuras()
                             local cd = GBI.GetCooldown(sid)
                             if cd then
                                 log("Debug", "poll-detect '%s' on %s -> %d", name, unit, sid)
-                                fire(unit, sid, cd)   -- routes through dedup
+                                fire(unit, sid, cd, castedAtFromAura(aura))   -- routes through dedup
                             end
                         end
                     end
@@ -95,12 +126,13 @@ f:SetScript("OnEvent", function(_, event, unit, updateInfo)
     log("Debug", "UNIT_AURA unit=%s addedAuras=%d", unit, #updateInfo.addedAuras)
 
     for _, aura in ipairs(updateInfo.addedAuras) do
+        local castedAt = castedAtFromAura(aura)
         -- Path 1: spellId. May be secret-tagged on remote-PC party members.
         local okId, rawId = pcall(function() return aura.spellId end)
         local spellID = okId and rawId and GBI.Taint.SafeSpellID(rawId) or nil
         local cd = spellID and GBI.GetCooldown(spellID)
         if cd and (not cd.class or cd.class == classToken) then
-            fire(unit, spellID, cd)
+            fire(unit, spellID, cd, castedAt)
         else
             -- Path 2: spell name. Names aren't tagged. Match against AuraMap.
             local okN, rawName = pcall(function() return aura.name end)
@@ -111,7 +143,7 @@ f:SetScript("OnEvent", function(_, event, unit, updateInfo)
                     local cdN = GBI.GetCooldown(sidByName)
                     if cdN then
                         log("Debug", "  evidence-by-name '%s' -> %d", rawName, sidByName)
-                        fire(unit, sidByName, cdN)
+                        fire(unit, sidByName, cdN, castedAt)
                     end
                 else
                     log("Debug", "  aura '%s' on %s -> no DB match", rawName, unit)
