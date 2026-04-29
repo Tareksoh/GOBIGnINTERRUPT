@@ -116,14 +116,17 @@ local function detectContext()
     return "unknown"
 end
 
--- Decide whether the engine should be on. Active only in 5-man party
--- content: player must be in a group of 2-5 (player + 1..4 others) and
--- NOT in a raid. Solo and raid hide everything.
+-- Decide whether the engine should be on. Default: Mythic+ only with a
+-- 2-5 person group. The `showAlways` toggle relaxes the M+ requirement so
+-- the engine runs in any non-raid 5-man (regular dungeons, timewalking,
+-- delves with a group, etc.). Solo and raid always hide.
 local function shouldEnable(context)
     if not GOBIGnINTERRUPTDB.enabled then return false end
     if IsInRaid and IsInRaid() then return false end
     local n = GetNumGroupMembers and GetNumGroupMembers() or 0
-    return n >= 2 and n <= 5
+    if n < 2 or n > 5 then return false end
+    if GOBIGnINTERRUPTDB.showAlways then return true end
+    return context == "mythicplus"
 end
 
 function App.UpdateContext()

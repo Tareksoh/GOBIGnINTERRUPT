@@ -359,7 +359,9 @@ local function pollPlayerDynamic()
     if not (state.player and C_Spell and C_Spell.GetSpellCooldown) then return end
     local now = GetTime()
     for sid, s in pairs(state.player) do
-        if s.endsAt > now then
+        -- Stack-resource entries (Brain.SetStacks) intentionally leave
+        -- endsAt = nil; skip them rather than aborting the whole scan.
+        if type(s.endsAt) == "number" and s.endsAt > now then
             local ok, info = pcall(C_Spell.GetSpellCooldown, sid)
             if ok and type(info) == "table" and info.startTime and info.duration
                and info.duration > 0 then
