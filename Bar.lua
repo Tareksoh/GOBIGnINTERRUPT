@@ -835,6 +835,10 @@ function M.SetEnabled(on)
     if engineEnabled then M.Show() else M.Hide() end
 end
 
+-- Public read: other modules (Evidence, StackTracker) gate their own work
+-- on this so they don't churn while the engine has decided to be off.
+function M.IsEngineEnabled() return engineEnabled end
+
 function M.GetInterruptAnchor() barInt.ensureAnchor(); return barInt.anchor end
 
 -- Visual test: drop a fake interrupt CD on every party slot so the row layout,

@@ -144,16 +144,26 @@ local function pollPartyAuras()
     end
 end
 
+-- Engine gate: ask Bar.IsEngineEnabled (set authoritatively by SetEnabled
+-- via App.UpdateContext). Evidence's UNIT_AURA handler and the polling
+-- loop both bail when the engine is off — saves CPU and silences the
+-- "no DB match" debug log spam outside dungeons.
+local function engineOn()
+    return GBI.Bar and GBI.Bar.IsEngineEnabled and GBI.Bar.IsEngineEnabled() or false
+end
+
 local poller = CreateFrame("Frame")
 poller:SetScript("OnUpdate", function(self, elapsed)
     self.acc = (self.acc or 0) + elapsed
     if self.acc < POLL_INTERVAL then return end
     self.acc = 0
+    if not engineOn() then return end
     pcall(pollPartyAuras)
 end)
 
 f:SetScript("OnEvent", function(_, event, unit, updateInfo)
     if event ~= "UNIT_AURA" then return end
+    if not engineOn() then return end
     if not K.PARTY_UNITS_SET[unit] then return end
     if not updateInfo or updateInfo.isFullUpdate or not updateInfo.addedAuras then return end
 
@@ -169,7 +179,9 @@ f:SetScript("OnEvent", function(_, event, unit, updateInfo)
         if cd and (not cd.class or cd.class == classToken) then
             fire(unit, spellID, cd, castedAt)
         else
-            -- Path 2: spell name. Names aren't tagged. Match against AuraMap.
+            -- Path 2: spell name. Names usually aren't tagged for friendly
+            -- units; if SafeString2 rejects the name, LookupByName returns
+            -- nil and we log "not in AuraMap (or tagged name)".
             local okN, rawName = pcall(function() return aura.name end)
             if okN and type(rawName) == "string" then
                 local sidByName = GBI.AuraMap and GBI.AuraMap.LookupByName
@@ -177,11 +189,23 @@ f:SetScript("OnEvent", function(_, event, unit, updateInfo)
                 if sidByName then
                     local cdN = GBI.GetCooldown(sidByName)
                     if cdN then
-                        log("Debug", "  evidence-by-name '%s' -> %d", rawName, sidByName)
+                        log("Debug", "  evidence-by-name '%s' on %s -> %d",
+                            rawName, unit, sidByName)
                         fire(unit, sidByName, cdN, castedAt)
+                    else
+                        -- AuraMap matched but the spell is gated by the
+                        -- user's Spell DB UI: GetCooldown nil means either
+                        -- it's in the disabled list, or some user-side
+                        -- override stripped it. Useful to distinguish from
+                        -- "not in AuraMap" so we don't chase phantom bugs.
+                        log("Debug", "  aura '%s' on %s -> matched %d but " ..
+                            "GetCooldown=nil (disabled in Spell DB?)",
+                            rawName, unit, sidByName)
                     end
                 else
-                    log("Debug", "  aura '%s' on %s -> no DB match", rawName, unit)
+                    log("Debug", "  aura '%s' on %s -> not in AuraMap " ..
+                        "(or name was secret-tagged and SafeString2 rejected)",
+                        rawName, unit)
                 end
             end
         end
