@@ -415,7 +415,7 @@ local function buildPanel()
         local txt = _G[s:GetName() .. "Text"]
         txt:SetText(label)
         s:SetScript("OnShow", function(self)
-            local def = ({ iconSize = 28, iconGap = 2 })[key] or 0
+            local def = ({ iconSize = 28, iconGap = 2, rows = 1 })[key] or 0
             self:SetValue((db().unitOverlay and db().unitOverlay[key]) or def)
         end)
         s:SetScript("OnValueChanged", function(self, v)
@@ -432,6 +432,11 @@ local function buildPanel()
     local sliderY = mkOffsetSlider(sliderX,   -22, "offsetY", "Y offset", -200, 200)
     local sliderSize = mkOffsetSlider(sliderY,    -22, "iconSize", "Overlay icon size", 16, 64)
     local sliderGap  = mkOffsetSlider(sliderSize, -22, "iconGap",  "Icon spacing",       0, 20)
+
+    -- Rows slider: 1 = single horizontal strip (legacy). 2+ = wrapped grid.
+    -- Useful for classes with many tracked CDs (Brewmaster Monk has ~9
+    -- non-interrupt CDs and was hitting the old 6-slot ceiling).
+    local sliderRows = mkOffsetSlider(sliderGap, -22, "rows",     "Overlay rows",       1, 3)
 
     -- test-mode toggle button (sits next to sliders)
     local testBtn = CreateFrame("Button", nil, content,"UIPanelButtonTemplate")

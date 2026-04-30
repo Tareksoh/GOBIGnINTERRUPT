@@ -180,32 +180,36 @@ f:SetScript("OnEvent", function(_, event, unit, updateInfo)
             fire(unit, spellID, cd, castedAt)
         else
             -- Path 2: spell name. Names usually aren't tagged for friendly
-            -- units; if SafeString2 rejects the name, LookupByName returns
-            -- nil and we log "not in AuraMap (or tagged name)".
+            -- units; we still distinguish a SafeString2 reject (tagged name)
+            -- from a real "not in AuraMap" so we know whether to chase a
+            -- 12.0.5 string-tagging regression vs a missing data entry.
             local okN, rawName = pcall(function() return aura.name end)
             if okN and type(rawName) == "string" then
-                local sidByName = GBI.AuraMap and GBI.AuraMap.LookupByName
-                    and GBI.AuraMap.LookupByName(rawName, classToken, unitSpec(unit))
-                if sidByName then
-                    local cdN = GBI.GetCooldown(sidByName)
-                    if cdN then
-                        log("Debug", "  evidence-by-name '%s' on %s -> %d",
-                            rawName, unit, sidByName)
-                        fire(unit, sidByName, cdN, castedAt)
-                    else
-                        -- AuraMap matched but the spell is gated by the
-                        -- user's Spell DB UI: GetCooldown nil means either
-                        -- it's in the disabled list, or some user-side
-                        -- override stripped it. Useful to distinguish from
-                        -- "not in AuraMap" so we don't chase phantom bugs.
-                        log("Debug", "  aura '%s' on %s -> matched %d but " ..
-                            "GetCooldown=nil (disabled in Spell DB?)",
-                            rawName, unit, sidByName)
-                    end
-                else
-                    log("Debug", "  aura '%s' on %s -> not in AuraMap " ..
-                        "(or name was secret-tagged and SafeString2 rejected)",
+                local cleanName = GBI.Taint and GBI.Taint.SafeString2
+                    and GBI.Taint.SafeString2(rawName) or nil
+                if not cleanName then
+                    log("Debug", "  aura '%s' on %s -> name is secret-tagged " ..
+                        "(SafeString2 rejected; lookup not attempted)",
                         rawName, unit)
+                else
+                    local sidByName = GBI.AuraMap and GBI.AuraMap.LookupByName
+                        and GBI.AuraMap.LookupByName(cleanName, classToken, unitSpec(unit))
+                    if sidByName then
+                        local cdN = GBI.GetCooldown(sidByName)
+                        if cdN then
+                            log("Debug", "  evidence-by-name '%s' on %s -> %d",
+                                rawName, unit, sidByName)
+                            fire(unit, sidByName, cdN, castedAt)
+                        else
+                            -- AuraMap matched but spell gated by user's Spell DB.
+                            log("Debug", "  aura '%s' on %s -> matched %d but " ..
+                                "GetCooldown=nil (disabled in Spell DB?)",
+                                rawName, unit, sidByName)
+                        end
+                    else
+                        log("Debug", "  aura '%s' on %s -> not in AuraMap",
+                            rawName, unit)
+                    end
                 end
             end
         end

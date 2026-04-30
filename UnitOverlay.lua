@@ -22,8 +22,6 @@ local K = GBI.K
 GBI.UnitOverlay = GBI.UnitOverlay or {}
 local M = GBI.UnitOverlay
 
-local MAX_ICONS = 6
-
 local function ICON_SIZE()
     local d = (GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.unitOverlay) or {}
     return d.iconSize or 28
@@ -32,6 +30,26 @@ end
 local function ICON_GAP()
     local d = (GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.unitOverlay) or {}
     return d.iconGap or 2
+end
+
+-- Per-row icon count. Default 6 keeps the historical single-row width.
+local function ICONS_PER_ROW()
+    local d = (GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.unitOverlay) or {}
+    return d.iconsPerRow or 6
+end
+
+-- Number of rows. 1 = old behavior (single horizontal/vertical strip).
+-- 2 = twice the icon capacity, stacked vertically (BOTTOM/TOP) or laid
+-- out as two columns (LEFT/RIGHT). Useful for classes with many tracked
+-- CDs (Brewmaster Monk has ~9 non-interrupt CDs and was hitting the old
+-- max=6 ceiling).
+local function ICON_ROWS()
+    local d = (GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.unitOverlay) or {}
+    return d.rows or 1
+end
+
+local function MAX_ICONS_TOTAL()
+    return ICONS_PER_ROW() * ICON_ROWS()
 end
 
 local function log(level, ...) if GBI.Log then GBI.Log[level]("overlay", ...) end end
@@ -62,11 +80,21 @@ function M.ApplyAnchor(container, host)
     container:SetPoint(pts[1], host, pts[2], ox, oy)
 end
 
+-- Container width = perRow icons across; height = rows icons tall.
+local function containerW()
+    local p = ICONS_PER_ROW()
+    return p * ICON_SIZE() + math.max(0, p - 1) * ICON_GAP()
+end
+local function containerH()
+    local r = ICON_ROWS()
+    return r * ICON_SIZE() + math.max(0, r - 1) * ICON_GAP()
+end
+
 function M.Refresh()
     local sz = ICON_SIZE()
     for _, c in pairs(containers) do
         if c.container and c.host then
-            c.container:SetSize((MAX_ICONS * sz + (MAX_ICONS - 1) * ICON_GAP()), sz)
+            c.container:SetSize(containerW(), containerH())
             for _, e in ipairs(c.icons) do e.icon:SetSize(sz, sz) end
             for _, e in ipairs(c.testIcons or {}) do e.icon:SetSize(sz, sz) end
             M.ApplyAnchor(c.container, c.host)
@@ -151,7 +179,7 @@ local function ensureContainer(unit)
     if c and c.noAddonTag then c.noAddonTag:Hide(); c.noAddonTag:SetParent(nil) end
 
     local container = CreateFrame("Frame", nil, host)
-    container:SetSize((MAX_ICONS * ICON_SIZE() + (MAX_ICONS - 1) * ICON_GAP()), ICON_SIZE())
+    container:SetSize(containerW(), containerH())
     container:SetFrameStrata("HIGH")
     container:Show()
     M.ApplyAnchor(container, host)
@@ -206,7 +234,7 @@ local function getIconEntry(c)
     for _, e in ipairs(c.icons) do
         if not e.icon:IsShown() then return e end
     end
-    if #c.icons >= MAX_ICONS then return nil end
+    if #c.icons >= MAX_ICONS_TOTAL() then return nil end
     local icon = CreateFrame("Frame", nil, c.container)
     icon:SetSize(ICON_SIZE(), ICON_SIZE())
     icon:SetFrameStrata("HIGH")
@@ -223,13 +251,18 @@ local function getIconEntry(c)
     return entry
 end
 
--- Layout direction: icons grow OUTWARD from the unit frame.
---   side BOTTOM -> container below frame, icons stack horizontally; first
---                  icon anchored TOPLEFT (under frame's left edge), grows right
---   side TOP    -> container above frame; first icon BOTTOMLEFT, grows right
---   side LEFT   -> container left of frame; first icon RIGHT-side of container
---                  (closest to frame), additional icons extend LEFTWARD
---   side RIGHT  -> container right of frame; first icon LEFT-side, grows right
+-- Grid layout: icons fill row-by-row, growing OUTWARD from the unit frame.
+--   col = (i - 1) % perRow      (0 = closest to host, grows outward)
+--   row = floor((i - 1) / perRow) (0 = closest to host, grows outward)
+--
+-- Per side, the corner of the container CLOSEST to the host is the
+-- "origin" — first icon goes there, columns grow along the long axis,
+-- rows grow away from the host on the short axis.
+--
+--   BOTTOM  -> container TOPLEFT     near host bottom, grow right + down
+--   TOP     -> container BOTTOMLEFT  near host top,    grow right + up
+--   LEFT    -> container TOPRIGHT    near host left,   grow left  + down
+--   RIGHT   -> container TOPLEFT     near host right,  grow right + down
 local function relayout(c)
     local shown = {}
     for _, e in ipairs(c.icons) do
@@ -238,18 +271,22 @@ local function relayout(c)
     table.sort(shown, GBI.MakeIconSort and GBI.MakeIconSort(
         GOBIGnINTERRUPTDB and GOBIGnINTERRUPTDB.cdSort or "endsAt"
     ) or function(a, b) return (a.endsAt or 0) < (b.endsAt or 0) end)
-    local side = (anchorCfg())   -- first return = side
+    local side = (anchorCfg())
+    local perRow = ICONS_PER_ROW()
+    local stride = ICON_SIZE() + ICON_GAP()
     for i, e in ipairs(shown) do
+        local col = (i - 1) % perRow
+        local row = math.floor((i - 1) / perRow)
         e.icon:ClearAllPoints()
         if side == "LEFT" then
-            e.icon:SetPoint("RIGHT", c.container, "RIGHT",
-                -(i - 1) * (ICON_SIZE() + ICON_GAP()), 0)
+            e.icon:SetPoint("TOPRIGHT", c.container, "TOPRIGHT",
+                -(col * stride), -(row * stride))
         elseif side == "TOP" then
             e.icon:SetPoint("BOTTOMLEFT", c.container, "BOTTOMLEFT",
-                (i - 1) * (ICON_SIZE() + ICON_GAP()), 0)
-        else  -- BOTTOM or RIGHT: anchor LEFT, grow rightward
-            e.icon:SetPoint("LEFT", c.container, "LEFT",
-                (i - 1) * (ICON_SIZE() + ICON_GAP()), 0)
+                col * stride, row * stride)
+        else  -- BOTTOM or RIGHT
+            e.icon:SetPoint("TOPLEFT", c.container, "TOPLEFT",
+                col * stride, -(row * stride))
         end
     end
 end
@@ -323,7 +360,7 @@ function M.OnCDStart(unit, spellID, state)
     if not entry then
         entry = getIconEntry(c)
         if not entry then
-            log("Info", "OnCDStart no free icon (max=%d) unit=%s", MAX_ICONS, unit); return
+            log("Info", "OnCDStart no free icon (max=%d) unit=%s", MAX_ICONS_TOTAL(), unit); return
         end
     end
     log("Debug", "OnCDStart unit=%s spell=%d host=%s",
@@ -425,7 +462,11 @@ local function applyTestVisuals(c, on)
             c.testBG = t
         else c.testBG:Show() end
         c.testIcons = c.testIcons or {}
-        for i = 1, 5 do
+        local testCount = math.min(MAX_ICONS_TOTAL(), 10)  -- cap visual clutter
+        local perRow = ICONS_PER_ROW()
+        local stride = ICON_SIZE() + ICON_GAP()
+        local side = (anchorCfg())
+        for i = 1, testCount do
             local entry = c.testIcons[i]
             if not entry then
                 local icon = CreateFrame("Frame", nil, c.container)
@@ -439,16 +480,17 @@ local function applyTestVisuals(c, on)
                 c.testIcons[i] = entry
             end
             entry.icon:ClearAllPoints()
-            local side = (anchorCfg())
+            local col = (i - 1) % perRow
+            local row = math.floor((i - 1) / perRow)
             if side == "LEFT" then
-                entry.icon:SetPoint("RIGHT", c.container, "RIGHT",
-                    -(i - 1) * (ICON_SIZE() + ICON_GAP()), 0)
+                entry.icon:SetPoint("TOPRIGHT", c.container, "TOPRIGHT",
+                    -(col * stride), -(row * stride))
             elseif side == "TOP" then
                 entry.icon:SetPoint("BOTTOMLEFT", c.container, "BOTTOMLEFT",
-                    (i - 1) * (ICON_SIZE() + ICON_GAP()), 0)
+                    col * stride, row * stride)
             else
-                entry.icon:SetPoint("LEFT", c.container, "LEFT",
-                    (i - 1) * (ICON_SIZE() + ICON_GAP()), 0)
+                entry.icon:SetPoint("TOPLEFT", c.container, "TOPLEFT",
+                    col * stride, -(row * stride))
             end
             entry.icon:Show()
         end
