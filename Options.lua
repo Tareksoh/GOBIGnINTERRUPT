@@ -280,6 +280,12 @@ local function buildPanel()
     subtitle:SetTextColor(0.7, 0.7, 0.7)
 
     -- ============= 1. General toggles ============= --
+    -- DB keys whose flip changes shouldEnable()'s answer. After writing
+    -- one, we must re-run App.UpdateContext so Bar.lua's engineEnabled
+    -- gate updates immediately instead of waiting for the next PEW /
+    -- ROSTER_UPDATE / ZONE_CHANGED event to fire.
+    local ENGINE_GATING_KEYS = { enabled = true, showAlways = true }
+
     local function mkToggle(parentRel, dy, dbKey, labelText)
         local cb = CreateFrame("CheckButton", nil, content,"UICheckButtonTemplate")
         cb:SetPoint("TOPLEFT", parentRel, "BOTTOMLEFT", 0, dy)
@@ -290,11 +296,7 @@ local function buildPanel()
             if dbKey == "locked" and GBI.Bar and GBI.Bar.RefreshLocked then
                 GBI.Bar.RefreshLocked()
             end
-            -- "Enable addon" toggle must re-run the context evaluation so
-            -- Bar.lua's engineEnabled gate updates immediately. Without
-            -- this, unticking left the bars visible until the next event
-            -- (PEW / ROSTER_UPDATE / ZONE_CHANGED) fired UpdateContext.
-            if dbKey == "enabled" and GBI.App and GBI.App.UpdateContext then
+            if ENGINE_GATING_KEYS[dbKey] and GBI.App and GBI.App.UpdateContext then
                 GBI.App.UpdateContext()
             end
         end)
@@ -304,9 +306,12 @@ local function buildPanel()
     local enable      = mkToggle(subtitle,  -8, "enabled",    "Enable addon")
     local debugTgl    = mkToggle(enable,    -2, "debug",      "Debug logging")
     local lockTgl     = mkToggle(debugTgl,  -2, "locked",     "Lock anchor (cannot drag)")
-    -- "Show outside dungeons" toggle removed. The engine now always tracks
-    -- when the addon is enabled; the show toggles below decide what's visible.
-    local showAlways = lockTgl     -- alias so downstream anchors still work
+    -- "Show always" re-introduced as a real checkbox. shouldEnable() in
+    -- GOBIGnINTERRUPT.lua still consults db.showAlways — when true, the
+    -- engine runs in any non-raid 5-man (regular dungeon, scenario,
+    -- delve), not only Mythic+.
+    local showAlways  = mkToggle(lockTgl,   -2, "showAlways",
+        "Show in any 5-man (regular dungeon, scenario, delve), not just M+")
 
     local function mkShowToggle(parentRel, dy, key, labelText)
         local cb = CreateFrame("CheckButton", nil, content, "UICheckButtonTemplate")
