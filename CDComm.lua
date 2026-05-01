@@ -44,15 +44,23 @@ local function enabled()
     return true
 end
 
--- Match "Name-Realm" or "Name" against a party unit token.
+-- Match "Name-Realm" or "Name" against a party unit token. Both sides need
+-- realm stripped: cross-realm party members (Connected Realms / LFG cross-
+-- server groups) have UnitName(partyN) return "Name-Realm" too, so a naive
+-- `n == short` compare with `n` left in long form would never match.
+local function shortName(n)
+    if type(n) ~= "string" then return nil end
+    return n:match("^([^%-]+)") or n
+end
+
 local function senderToUnit(sender)
     if not sender then return nil end
-    local short = sender:match("^([^%-]+)") or sender
+    local short = shortName(sender)
     for i = 1, 4 do
         local u = "party" .. i
         if UnitExists(u) then
             local n = UnitName(u)
-            if n == short then return u end
+            if shortName(n) == short then return u end
         end
     end
     return nil
@@ -90,7 +98,13 @@ function M.BroadcastInterrupt()
 end
 
 -- Late-join query: ask peers for their active CDs.
+-- Guard before stamping lastQueryAt: if comm is disabled or we're not in
+-- a group, send() bails silently and the broadcast never goes out. Stamping
+-- the timestamp anyway would leave PeerHasAddon's false-after-grace branch
+-- live indefinitely, painting red "?" on every party row even though we
+-- never actually asked anyone.
 function M.SendQuery()
+    if not enabled() or not IsInGroup() then return end
     log("Debug", "send Q")
     lastQueryAt = GetTime()
     return send("Q")
@@ -106,7 +120,12 @@ function M.PeerHasAddon(unit)
     if unit == "player" or UnitIsUnit(unit, "player") then return true end
     local name = UnitName(unit)
     if not name then return nil end
-    local seen = peerSeen[name]
+    -- peerSeen is keyed on the SHORT name (CHAT_MSG_ADDON handler stripped
+    -- realm before storing). For cross-realm party members UnitName returns
+    -- "Name-Realm" — without normalizing here the lookup misses and the
+    -- function falls through to false / red "?". Strip realm both sides.
+    local short = shortName(name)
+    local seen = short and peerSeen[short]
     if seen and (GetTime() - seen) < PEER_STALE then return true end
     if lastQueryAt > 0 and (GetTime() - lastQueryAt) > PEER_GRACE then return false end
     return nil
@@ -131,7 +150,7 @@ function M.DumpPeerPresence()
         local u = "party" .. i
         if UnitExists(u) then
             local name = UnitName(u) or "?"
-            local seen = peerSeen[name]
+            local seen = peerSeen[shortName(name)]
             local has = M.PeerHasAddon(u)
             table.insert(out.peers, {
                 name    = name,
