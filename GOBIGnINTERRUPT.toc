@@ -25,6 +25,7 @@ Inspect.lua
 CastTracker.lua
 Brain.lua
 Evidence.lua
+NativeFilters.lua
 Interrupt.lua
 
 # UI
