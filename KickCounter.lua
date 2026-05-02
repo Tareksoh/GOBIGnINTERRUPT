@@ -83,13 +83,23 @@ function M.Print()
     for name, n in pairs(counts) do print(("  %s: %d"):format(name, n)) end
 end
 
+-- A successful UNIT_SPELLCAST_SUCCEEDED for an interrupt spell only tells
+-- us the spell was CAST, not that anything was actually interrupted (target
+-- might not have been casting / was stunned / dead / out of range). The
+-- UNIT_SPELLCAST_INTERRUPTED event on the enemy is the authoritative
+-- "kick landed" signal — attributeInterrupt() handles the credit there.
+--
+-- Crediting here in addition to attributeInterrupt would double-count
+-- every successful kick made by the local addon user (the one player
+-- whose own spell IDs aren't 12.0.5-redacted). Other party members'
+-- counts route only through Path 2 (UNIT_SPELLCAST_INTERRUPTED +
+-- temporal attribution / peer-broadcast), so this only affected the
+-- viewer's own row in the bar.
 local function onCast(unit, spellID)
     if not isInterruptSpell(spellID) then return end
-    local name = UnitName(unit)
-    if not name then return end
-    counts[name] = (counts[name] or 0) + 1
-    log("Debug", "kick++ %s spell=%d total=%d", name, spellID, counts[name])
-    refresh()
+    local name = UnitName(unit) or "?"
+    log("Debug", "interrupt cast seen on %s spell=%d (no credit; pending INTERRUPTED)",
+        name, spellID)
 end
 
 local function maybeResetForNewInstance()
