@@ -9,6 +9,10 @@
 ## IconTexture: Interface\AddOns\GOBIGnINTERRUPT\icon\gobig.png
 ## X-Category: Combat
 
+# Embedded libraries — must load before any module that uses LibStub
+libs\LibStub\LibStub.lua
+libs\LibSpecialization\LibSpecialization.lua
+
 # Foundational - no deps
 Log.lua
 Constants.lua
