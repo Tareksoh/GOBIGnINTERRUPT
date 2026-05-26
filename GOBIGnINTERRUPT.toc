@@ -30,6 +30,7 @@ CastTracker.lua
 Brain.lua
 Evidence.lua
 NativeFilters.lua
+SignatureDetector.lua
 Interrupt.lua
 
 # UI

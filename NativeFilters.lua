@@ -82,30 +82,102 @@ end
 -- actually cast by aura.sourceUnit. Returns a unit token (string) we
 -- trust, or falls back to scannedUnit so self-buffs still attribute
 -- correctly.
+-- Returns (unit, trusted). `trusted` is true only when aura.sourceUnit was a
+-- real party token — i.e. Blizzard told us who cast it. When false, we fall
+-- back to the scanned unit (good enough for self-buffs) but the spillover
+-- resolver must NOT treat that fallback as proof of a distinct caster.
 local function attributionUnit(aura, scannedUnit)
     local okSrc, src = pcall(function() return aura.sourceUnit end)
-    if okSrc and type(src) == "string" then
-        if src == "player" or K.PARTY_UNITS_SET[src] then
-            return src
-        end
-        -- Sometimes sourceUnit is "pet" or a token we don't manage. Drop
-        -- through to scannedUnit so the cooldown still shows somewhere
-        -- reasonable; better than ignoring the cast entirely.
+    if okSrc and type(src) == "string"
+        and (src == "player" or K.PARTY_UNITS_SET[src]) then
+        return src, true
     end
-    return scannedUnit
+    return scannedUnit, false
 end
 
-local function processAura(aura, scannedUnit)
-    local okId, rawId = pcall(function() return aura.spellId end)
-    if not okId or not rawId then return end
-    local spellID = GBI.Taint and GBI.Taint.SafeSpellID
-        and GBI.Taint.SafeSpellID(rawId) or nil
-    if not spellID then return end
+-- ---------------------------------------------------------------------------
+-- P4: disambiguation when the aura's spell ID is redacted.
+--
+-- GetUnitAuras usually returns clean spell IDs, but for some remote-PC
+-- party auras in 12.0.5 aura.spellId is tagged and SafeSpellID returns nil.
+-- Rather than drop the detection, we narrow by (class, spec, Blizzard
+-- filter category): if exactly one DB spell for that unit could be in the
+-- category that returned this aura, it must be that spell.
+--
+-- We classify our OWN DB spells once at first use, with their clean local
+-- spell IDs (no taint), via the same Blizzard predicates MiniCC/IT use:
+--   C_UnitAuras.AuraIsBigDefensive(spellID) -> BIG_DEFENSIVE
+--   C_Spell.IsSpellImportant(spellID)       -> IMPORTANT
+-- (EXTERNAL_DEFENSIVE has no clean predicate; those auras almost always
+--  carry a clean spell ID anyway since they're cast by a visible peer, so
+--  the clean path handles them.)
+-- ---------------------------------------------------------------------------
 
-    local cd = GBI.GetCooldown(spellID)
-    if not cd then return end  -- spell not in our DB; nothing to track
+local candidateIndex   -- [classToken][filterTag] = { spellID, ... }
 
-    local attribUnit = attributionUnit(aura, scannedUnit)
+local function buildCandidateIndex()
+    local idx = {}
+    local entries = GBI.IterCooldowns and GBI.IterCooldowns() or GBI.Cooldowns or {}
+    for sid, cd in pairs(entries) do
+        if cd and cd.class then
+            local function add(tag)
+                idx[cd.class] = idx[cd.class] or {}
+                idx[cd.class][tag] = idx[cd.class][tag] or {}
+                table.insert(idx[cd.class][tag], sid)
+            end
+            local okBD, isBD = pcall(C_UnitAuras.AuraIsBigDefensive, sid)
+            if okBD and isBD then add("BIG_DEFENSIVE") end
+            local okI, isI = pcall(function() return C_Spell.IsSpellImportant(sid) end)
+            if okI and isI then add("IMPORTANT") end
+        end
+    end
+    return idx
+end
+
+-- Returns the unit's spec as the GetSpecialization() 1..4 index, matching
+-- the cd.spec values in Data_Cooldowns (NOT the global spec ID). Player uses
+-- GetSpecialization() directly; party uses Inspect.GetSpecByGUID (which also
+-- stores the 1..4 index). Mirrors Evidence.lua's unitSpec.
+local function unitSpec(unit)
+    if unit == "player" then
+        return GetSpecialization and GetSpecialization() or nil
+    end
+    local guid = GBI.Taint and GBI.Taint.SafeGUID and GBI.Taint.SafeGUID(unit) or nil
+    return guid and GBI.Inspect and GBI.Inspect.GetSpecByGUID
+        and GBI.Inspect.GetSpecByGUID(guid) or nil
+end
+
+-- Given a unit and the Blizzard filter category that returned a tagged
+-- aura, return the unique candidate spell ID — or nil if zero / ambiguous.
+local function disambiguate(unit, filterTag)
+    if not candidateIndex then candidateIndex = buildCandidateIndex() end
+    local _, classToken = UnitClass(unit)
+    if not classToken then return nil end
+    local list = candidateIndex[classToken] and candidateIndex[classToken][filterTag]
+    if not list or #list == 0 then return nil end
+    local specID = unitSpec(unit)
+    local matches = {}
+    for _, sid in ipairs(list) do
+        local cd = GBI.GetCooldown(sid)
+        if cd then
+            if cd.spec and specID then
+                for _, s in ipairs(cd.spec) do
+                    if s == specID then matches[#matches + 1] = sid; break end
+                end
+            elseif not cd.spec then
+                matches[#matches + 1] = sid
+            end
+        end
+    end
+    if #matches == 1 then return matches[1] end
+    return nil   -- zero or ambiguous: don't guess
+end
+
+-- Commit a single confirmed detection to Brain. Extracted from the old
+-- processAura so both the normal path and the spillover-resolved path
+-- share one code path.
+local function commit(attribUnit, spellID, cd, aura)
+    if not attribUnit or not spellID or not cd then return end
 
     -- Class match: cd.class is the caster's class; verify against
     -- attribUnit. classToken nil (transient inspect race) -> permissive.
@@ -115,8 +187,6 @@ local function processAura(aura, scannedUnit)
     end
 
     -- Skip if Brain already has a fresh entry for this (unit, spell).
-    -- fire() inside Evidence does the same check; we replicate it here
-    -- so we don't pile log spam from repeated polls.
     local existing = GBI.Brain and GBI.Brain.GetState
         and GBI.Brain.GetState(attribUnit, spellID)
     if existing and existing.endsAt and existing.endsAt > GetTime() + 1 then
@@ -124,33 +194,119 @@ local function processAura(aura, scannedUnit)
     end
 
     local castedAt = castedAtFromAura(aura)
-    log("Debug", "native-detect %d on %s (source=%s) castedAt=%s",
-        spellID, attribUnit, scannedUnit, tostring(castedAt))
+    log("Debug", "native-detect %d on %s castedAt=%s",
+        spellID, attribUnit, tostring(castedAt))
     if GBI.Brain and GBI.Brain.OnCast then
         GBI.Brain.OnCast(attribUnit, spellID, cd, nil, castedAt)
     end
 end
 
-local function scanUnit(unit)
-    if not UnitExists(unit) then return end
-    for _, filter in ipairs(FILTERS) do
-        local ok, auras = pcall(C_UnitAuras.GetUnitAuras, unit, filter)
-        if ok and type(auras) == "table" then
-            for _, aura in ipairs(auras) do
-                pcall(processAura, aura, unit)
+-- Same spell appearing on >= this many distinct party members in one scan
+-- is treated as an AoE / spillover event (Berserker Roar group buff,
+-- Grounding Totem spillover, encounter-wide IMPORTANT auras) rather than
+-- that many independent casts.
+local SPILLOVER_MIN_UNITS = 3
+
+-- Single scan pass over the whole party, collect-then-decide so we can
+-- recognize AoE spillover (P2). Two phases:
+--   1. Collect every filtered aura whose spellID is in our DB, grouped by
+--      spellID, recording (recipient unit, attributed source, aura).
+--   2. Per spell: if it landed on >= SPILLOVER_MIN_UNITS recipients it's a
+--      group/AoE effect — credit only the single consistent source (the
+--      caster also receives their own buff), or suppress entirely when the
+--      source is ambiguous. Otherwise credit each hit normally (Brain's
+--      250ms dedup collapses same-source duplicates).
+local function scanAll()
+    local candidates = {}   -- spellID -> { { recipient, source, aura, cd }, ... }
+    for _, unit in ipairs(K.PARTY_UNITS) do
+        if UnitExists(unit) then
+            for _, filter in ipairs(FILTERS) do
+                local filterTag = filter:match("|([%w_]+)$")   -- e.g. BIG_DEFENSIVE (note underscore)
+                local ok, auras = pcall(C_UnitAuras.GetUnitAuras, unit, filter)
+                if ok and type(auras) == "table" then
+                    for _, aura in ipairs(auras) do
+                        local okId, rawId = pcall(function() return aura.spellId end)
+                        local spellID = okId and rawId and GBI.Taint and GBI.Taint.SafeSpellID
+                            and GBI.Taint.SafeSpellID(rawId) or nil
+                        -- P4: spell ID redacted -> narrow by class+spec+category.
+                        if not spellID and filterTag then
+                            spellID = disambiguate(unit, filterTag)
+                            if spellID then
+                                log("Debug", "disambiguated tagged %s aura on %s -> %d",
+                                    filterTag, unit, spellID)
+                            end
+                        end
+                        local cd = spellID and GBI.GetCooldown(spellID) or nil
+                        if cd then
+                            local src, trusted = attributionUnit(aura, unit)
+                            candidates[spellID] = candidates[spellID] or {}
+                            table.insert(candidates[spellID],
+                                { recipient = unit, source = src,
+                                  trusted = trusted, aura = aura, cd = cd })
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    for spellID, hits in pairs(candidates) do
+        local distinctRecipients = {}
+        for _, h in ipairs(hits) do distinctRecipients[h.recipient] = true end
+        local recipientCount = 0
+        for _ in pairs(distinctRecipients) do recipientCount = recipientCount + 1 end
+
+        if recipientCount >= SPILLOVER_MIN_UNITS then
+            -- This spell is active on many units. Resolve using only
+            -- TRUSTED sources (aura.sourceUnit was a real party token).
+            -- Each distinct trusted source = one genuine cast:
+            --   * 1 trusted source  -> a group buff (Berserker Roar): the
+            --     other recipients are spillover; credit the caster once.
+            --   * N trusted sources -> N independent casters happened to
+            --     have the same buff up (3 Paladins on Avenging Wrath);
+            --     credit each — NOT a spillover, don't drop them.
+            --   * 0 trusted sources -> unattributable AoE (encounter buff,
+            --     or fallback-only data); suppress.
+            local trustedHit = {}   -- source -> a representative hit
+            for _, h in ipairs(hits) do
+                if h.trusted and not trustedHit[h.source] then
+                    trustedHit[h.source] = h
+                end
+            end
+            local n = 0
+            for src, h in pairs(trustedHit) do
+                n = n + 1
+                commit(src, spellID, h.cd, h.aura)
+            end
+            if n == 0 then
+                log("Debug", "spillover %d on %d units, no trusted source -> suppress",
+                    spellID, recipientCount)
+            else
+                log("Debug", "spillover %d on %d units -> credited %d trusted source(s)",
+                    spellID, recipientCount, n)
+            end
+        else
+            for _, h in ipairs(hits) do
+                commit(h.source, spellID, h.cd, h.aura)
             end
         end
     end
 end
 
-local function scanAll()
-    for _, unit in ipairs(K.PARTY_UNITS) do
-        pcall(scanUnit, unit)
-    end
+-- Coalesced scan: many UNIT_AURA events fire in a burst when an AoE buff
+-- lands on the whole party. Debounce them into a single spillover-aware
+-- scanAll 0.1s later so the collect-then-decide pass sees all units at once.
+local scanPending = false
+local function requestScan()
+    if scanPending then return end
+    scanPending = true
+    C_Timer.After(0.1, function()
+        scanPending = false
+        if engineOn() then scanAll() end
+    end)
 end
 
--- Periodic poll: backstop in case UNIT_AURA event delivery is missed
--- or arrives before the engine flips the gate to enabled.
+-- Periodic poll: backstop in case UNIT_AURA event delivery is missed.
 local poller = CreateFrame("Frame", "GOBIGnINTERRUPT_NativeFiltersPoller")
 poller:SetScript("OnUpdate", function(self, elapsed)
     self.acc = (self.acc or 0) + elapsed
@@ -160,9 +316,7 @@ poller:SetScript("OnUpdate", function(self, elapsed)
     scanAll()
 end)
 
--- Event-driven: scan the affected unit on UNIT_AURA, refresh whole
--- party on roster updates so newly-joined members get scanned without
--- waiting POLL_INTERVAL.
+-- Event-driven: any party aura change requests a debounced scan.
 local f = CreateFrame("Frame", "GOBIGnINTERRUPT_NativeFiltersFrame")
 f:RegisterUnitEvent("UNIT_AURA",
     "player", "party1", "party2", "party3", "party4")
@@ -173,10 +327,10 @@ f:SetScript("OnEvent", function(_, event, unit)
     if event == "UNIT_AURA" then
         if type(unit) ~= "string" then return end
         if unit == "player" or unit:match("^party[1-4]$") then
-            pcall(scanUnit, unit)
+            requestScan()
         end
     elseif event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ENTERING_WORLD" then
-        scanAll()
+        requestScan()
     end
 end)
 
