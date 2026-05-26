@@ -407,6 +407,13 @@ local function newBar(spec)
         if not GBI.SpellsForUnit then return end
         local row = self.rows[unit]
         if not row then return end
+        -- Don't run the destructive prune below when the unit's class can't
+        -- be resolved yet (transient UnitClass / inspect / roster race):
+        -- SpellsForUnit would return empty and we'd delete every LIVE
+        -- cooldown icon, not just placeholders. Skip and let the next
+        -- refresh retry.
+        local _, classToken = UnitClass(unit)
+        if not classToken then return end
         local list = self.icons[unit] or {}
         self.icons[unit] = list
 
@@ -416,6 +423,9 @@ local function newBar(spec)
         -- Build expected spell-ID set (already filtered by class+spec+disabled).
         local expected = {}
         for _, e in ipairs(GBI.SpellsForUnit(unit)) do expected[e.sid] = true end
+        -- Class resolved but zero spells came back -> treat as a transient
+        -- failure and skip the prune rather than wiping live icons.
+        if not next(expected) then return end
 
         -- Prune ANY entry whose spell is no longer in the expected set
         -- (spec changed, or user disabled the spell mid-run). Also prune

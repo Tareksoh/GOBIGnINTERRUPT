@@ -28,6 +28,14 @@ local label                       -- fontstring on the interrupt bar
 
 local function log(level, ...) if GBI.Log then GBI.Log[level]("kicks", ...) end end
 
+-- Counts are keyed by SHORT name (realm stripped) for cross-realm
+-- consistency — UnitName can return "Name-Realm" for cross-realm party
+-- members, which would split a player's count across two keys.
+local function shortName(n)
+    if type(n) ~= "string" then return nil end
+    return n:match("^([^%-]+)") or n
+end
+
 local function isInterruptSpell(spellID)
     -- Use GBI.GetCooldown as the single chokepoint - it pcalls the table
     -- index so secret-tagged spellIDs miss cleanly instead of throwing.
@@ -53,7 +61,7 @@ local function refresh()
     local parts = {}
     for _, unit in ipairs(K.PARTY_UNITS) do
         if UnitExists(unit) then
-            local name = UnitName(unit) or unit
+            local name = shortName(UnitName(unit)) or unit
             local n = counts[name] or 0
             local _, classToken = UnitClass(unit)
             local s
@@ -144,7 +152,7 @@ local function recordRecentCast(unit)
 end
 
 local function creditUnit(unit, reason)
-    local name = UnitName(unit)
+    local name = shortName(UnitName(unit))
     if not name then return end
     counts[name] = (counts[name] or 0) + 1
     log("Debug", "kick++ %s (%s) total=%d", name, reason, counts[name])

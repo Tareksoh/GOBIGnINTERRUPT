@@ -46,8 +46,11 @@ K.SOUND_CAT_CD_CAST         = "cd_cast"
 K.SOUND_CAT_CD_READY        = "cd_ready"
 
 -- Mythic+ instance difficulty IDs.
--- See https://warcraft.wiki.gg/wiki/DifficultyID. 8 = Mythic Keystone.
-K.M_PLUS_DIFFICULTIES = { [8] = true, [23] = true }   -- 23 = Mythic 5-man (legacy)
+-- See https://warcraft.wiki.gg/wiki/DifficultyID. 8 = Mythic Keystone (M+).
+-- Difficulty 23 is base Mythic ("Mythic 0", non-keystone) — a regular party
+-- context, NOT Mythic+, so it is intentionally excluded. Players who want
+-- the engine active in Mythic-0 (or any non-raid 5-man) enable showAlways.
+K.M_PLUS_DIFFICULTIES = { [8] = true }
 
 -- Class tokens (uppercase, English; from UnitClass second return) ---------
 K.CLASS_TOKENS = {

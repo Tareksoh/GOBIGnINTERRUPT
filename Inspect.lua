@@ -185,10 +185,13 @@ local function globalSpecToIndex(globalSpec, classID)
 end
 
 local function onInspectReady(guid)
+    -- The INSPECT_READY guid arg can be secret-tagged for remote units;
+    -- reject it before any equality test (a tagged string throws on ==).
     if not guid then return end
+    if GBI.Taint and GBI.Taint.IsSecret and GBI.Taint.IsSecret(guid) then return end
     for unit, entry in pairs(pendingByUnit) do
-        local g = unitGUIDSafe(unit)
-        if g == guid then
+        local g = unitGUIDSafe(unit)   -- SafeGUID: already non-secret or nil
+        if g and g == guid then
             local globalSpec = GetInspectSpecialization and GetInspectSpecialization(unit) or nil
             -- Get the unit's class (uppercase token from UnitClass).
             local _, classToken = UnitClass(unit)

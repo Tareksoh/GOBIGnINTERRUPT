@@ -24,15 +24,29 @@ local function push(level, mod, msg)
     return line
 end
 
+-- Stringify one value without ever throwing on a secret. issecretvalue is
+-- checked first (a tagged value's tostring can itself be tagged / throw),
+-- then tostring under pcall, falling back to a placeholder.
+local function safeStr(v)
+    if GBI.Taint and GBI.Taint.IsSecret and GBI.Taint.IsSecret(v) then
+        return "<secret>"
+    end
+    local ok, s = pcall(tostring, v)
+    if ok and type(s) == "string" then return s end
+    return "<secret>"
+end
+
 local function fmt(...)
-    local args = { ... }
-    if #args == 0 then return "" end
-    if #args == 1 then return tostring(args[1]) end
+    local n = select("#", ...)
+    if n == 0 then return "" end
+    if n == 1 then return safeStr((...)) end
+    -- Try string.format; if any arg is secret it throws and we fall back to
+    -- per-arg safe stringification so a debug log never becomes a crash.
     local ok, s = pcall(string.format, ...)
-    if ok then return s end
-    -- format threw: stringify args one by one
+    if ok and type(s) == "string" then return s end
+    local args = { ... }
     local parts = {}
-    for i = 1, #args do parts[i] = tostring(args[i]) end
+    for i = 1, n do parts[i] = safeStr(args[i]) end
     return table.concat(parts, " ")
 end
 

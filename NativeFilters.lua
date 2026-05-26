@@ -87,9 +87,14 @@ end
 -- back to the scanned unit (good enough for self-buffs) but the spillover
 -- resolver must NOT treat that fallback as proof of a distinct caster.
 local function attributionUnit(aura, scannedUnit)
-    local okSrc, src = pcall(function() return aura.sourceUnit end)
-    if okSrc and type(src) == "string"
-        and (src == "player" or K.PARTY_UNITS_SET[src]) then
+    local okSrc, rawSrc = pcall(function() return aura.sourceUnit end)
+    -- aura.sourceUnit can be secret-tagged on remote-PC auras; sanitize
+    -- BEFORE the == compare and the table-key lookup below (both throw on
+    -- a tagged string). SafeString2 returns nil for secrets -> untrusted.
+    local src = (okSrc and type(rawSrc) == "string"
+        and GBI.Taint and GBI.Taint.SafeString2
+        and GBI.Taint.SafeString2(rawSrc)) or nil
+    if src and (src == "player" or K.PARTY_UNITS_SET[src]) then
         return src, true
     end
     return scannedUnit, false
@@ -302,7 +307,7 @@ local function requestScan()
     scanPending = true
     C_Timer.After(0.1, function()
         scanPending = false
-        if engineOn() then scanAll() end
+        if engineOn() then pcall(scanAll) end
     end)
 end
 
@@ -313,7 +318,7 @@ poller:SetScript("OnUpdate", function(self, elapsed)
     if self.acc < POLL_INTERVAL then return end
     self.acc = 0
     if not engineOn() then return end
-    scanAll()
+    pcall(scanAll)   -- one weird aura must not kill the poller
 end)
 
 -- Event-driven: any party aura change requests a debounced scan.

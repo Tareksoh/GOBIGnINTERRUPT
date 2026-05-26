@@ -43,23 +43,15 @@ T.IsSecret = isSecret
 
 local function laundered(rawNum)
     if rawNum == nil then return nil end
-    -- Path 1: tostring -> tonumber. Works for clean values + most tagged
-    -- numbers (the tagging propagates through tostring digits in some
-    -- builds but the resulting tonumber still strips it).
-    local ok, s = pcall(tostring, rawNum)
-    if ok and type(s) == "string" then
-        local n = tonumber(s)
-        if n then return n end
-    end
-    -- Path 2: string.format("%d", x). C-level integer formatting. The
-    -- output string is plain Lua (not a tagged Lua-string), so tonumber
-    -- works cleanly. Also pcall'd because format on a tagged number can
-    -- still throw in some builds.
-    local ok2, s2 = pcall(string.format, "%d", rawNum)
-    if ok2 and type(s2) == "string" then
-        local n = tonumber(s2)
-        if n then return n end
-    end
+    -- Path 1: tonumber(tostring(x)). BOTH steps inside one pcall: a secret
+    -- number's tostring can yield a tagged string, and tonumber on that can
+    -- throw in some builds, so neither step may run unguarded.
+    local ok, n = pcall(function() return tonumber(tostring(rawNum)) end)
+    if ok and type(n) == "number" then return n end
+    -- Path 2: C-level integer format, also fully pcall'd. The output is a
+    -- plain Lua string so tonumber on it is clean.
+    local ok2, n2 = pcall(function() return tonumber(string.format("%d", rawNum)) end)
+    if ok2 and type(n2) == "number" then return n2 end
     return nil
 end
 
@@ -68,7 +60,10 @@ function T.SafeNumber(raw)
 end
 
 function T.SafeSpellID(raw)
-    if raw == nil or isSecret(raw) then return nil end
+    if raw == nil then return nil end
+    -- Launder rather than early-reject: tostring->tonumber strips the secret
+    -- marker, so a tagged-but-launderable spell ID is recovered as a clean
+    -- positive number instead of being dropped (avoidable false negatives).
     local n = laundered(raw)
     if type(n) ~= "number" or n <= 0 then return nil end
     return n
@@ -99,15 +94,24 @@ function T.SafeAura(aura, key)
     return false, nil
 end
 
--- Wrap UnitGUID. For hostile/private units in 12.0.x it can return a tainted
--- string; we don't index by it but we do compare equality, which is fine on
--- strings even if tainted. Still, this gives us a defensive read.
+-- Wrap UnitGUID and REJECT secret strings. Callers use the result as a
+-- table key (Inspect spec cache) and in equality, both of which throw on a
+-- tagged string. Returning nil for a secret GUID means that unit simply
+-- isn't cached/matched — graceful degradation (spec falls back to permissive
+-- / peer-comm / defaults) instead of a crash.
 function T.SafeGUID(unit)
     if not unit then return nil end
     local ok, g = pcall(UnitGUID, unit)
     if not ok then return nil end
     if type(g) ~= "string" then return nil end
+    if isSecret(g) then return nil end
     return g
+end
+
+-- Explicit name for the "safe to use as a table key" contract. Identical to
+-- SafeGUID (which now rejects secrets); use this at key-use sites for intent.
+function T.SafeGUIDKey(unit)
+    return T.SafeGUID(unit)
 end
 
 -- pcall a function and return (ok, returns...). Logs an Err line on failure

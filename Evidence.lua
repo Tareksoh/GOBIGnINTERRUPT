@@ -119,8 +119,15 @@ local function pollPartyAuras()
                     if consecutiveNil >= 2 then break end
                 else
                     consecutiveNil = 0
-                    local okN, name = pcall(function() return aura.name end)
-                    if okN and type(name) == "string" then
+                    local okN, rawName = pcall(function() return aura.name end)
+                    -- Sanitize BEFORE using as a table key / lookup arg. A
+                    -- secret-tagged name throws on table-index; SafeString2
+                    -- returns nil for secrets so we skip this slot but keep
+                    -- scanning the rest.
+                    local name = (okN and type(rawName) == "string"
+                        and GBI.Taint and GBI.Taint.SafeString2
+                        and GBI.Taint.SafeString2(rawName)) or nil
+                    if name then
                         local last = seenAuras[unit][name]
                         -- New aura, OR the same aura recently expired and was re-applied
                         if not last or (now - last) > 5 then

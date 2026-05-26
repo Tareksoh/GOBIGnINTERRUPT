@@ -24,6 +24,14 @@ local M = GBI.StackTracker
 
 local function log(level, ...) if GBI.Log then GBI.Log[level]("stacks", ...) end end
 
+-- Engine gate: stack-resource spells only matter inside the tracked
+-- context (M+ / showAlways). When the engine is off, skip all scan work so
+-- we don't poll C_UnitAuras every 0.5s in raids/world or write Brain/UI
+-- state. (Index building on login still runs — it's cheap and harmless.)
+local function engineOn()
+    return GBI.Bar and GBI.Bar.IsEngineEnabled and GBI.Bar.IsEngineEnabled() or false
+end
+
 -- Build a reverse index: auraID -> { spellID, threshold }.
 local function buildIndex()
     local idx = {}
@@ -58,21 +66,38 @@ end
 local function scanUnit(unit)
     if not UnitExists(unit) then return end
     if next(auraIndex) == nil then return end
+    -- Skip individual unreadable (private-aura) slots instead of breaking
+    -- the whole scan; two consecutive nils = genuine end-of-list. Same
+    -- pattern as Evidence.lua.
+    local consecutiveNil = 0
     for i = 1, 40 do
         local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, unit, i, "HELPFUL")
-        if not ok or not aura then break end
-        local okId, sid = pcall(function() return aura.spellId end)
-        -- Reject secret-tagged spellIds; pcall the table index defensively.
-        if okId and sid and not (GBI.Taint and GBI.Taint.IsSecret
-            and GBI.Taint.IsSecret(sid)) then
-            local okIdx, entry = pcall(function() return auraIndex[sid] end)
-            if not okIdx then entry = nil end
-            if entry then
-                local okN, n = pcall(function() return aura.applications end)
-                local stackN = (okN and type(n) == "number") and n or 1
-                setStacks(unit, entry.spellID, stackN, entry.threshold)
-                if unit == "player" and GBI.CDComm and GBI.CDComm.BroadcastStacks then
-                    GBI.CDComm.BroadcastStacks(entry.spellID, stackN)
+        if not ok then
+            consecutiveNil = 0
+        elseif not aura then
+            consecutiveNil = consecutiveNil + 1
+            if consecutiveNil >= 2 then break end
+        else
+            consecutiveNil = 0
+            -- Launder the spell ID (tostring->tonumber strips the secret
+            -- marker) rather than rejecting tagged values outright.
+            local okId, rawId = pcall(function() return aura.spellId end)
+            local sid = okId and rawId and GBI.Taint and GBI.Taint.SafeSpellID
+                and GBI.Taint.SafeSpellID(rawId) or nil
+            if sid then
+                local entry = auraIndex[sid]   -- sid is now a clean number
+                if entry then
+                    -- applications can be a secret number (type()=="number"
+                    -- still passes for tagged), which would propagate into
+                    -- Brain/UI and throw on a later >= compare. Launder it.
+                    local okN, rawN = pcall(function() return aura.applications end)
+                    local stackN = (okN and rawN ~= nil
+                        and GBI.Taint and GBI.Taint.SafeNumber
+                        and GBI.Taint.SafeNumber(rawN)) or 1
+                    setStacks(unit, entry.spellID, stackN, entry.threshold)
+                    if unit == "player" and GBI.CDComm and GBI.CDComm.BroadcastStacks then
+                        GBI.CDComm.BroadcastStacks(entry.spellID, stackN)
+                    end
                 end
             end
         end
@@ -90,8 +115,9 @@ f:SetScript("OnEvent", function(_, event, unit)
         return
     end
     if not unit then return end
+    if not engineOn() then return end
     if unit ~= "player" and not (type(unit) == "string" and unit:match("^party[1-4]$")) then return end
-    scanUnit(unit)
+    pcall(scanUnit, unit)
 end)
 
 -- Periodic backup poll. UNIT_AURA can be silent on some configurations.
@@ -100,6 +126,7 @@ poller:SetScript("OnUpdate", function(self, elapsed)
     self.acc = (self.acc or 0) + elapsed
     if self.acc < 0.5 then return end
     self.acc = 0
+    if not engineOn() then return end
     if next(auraIndex) == nil then return end
     for _, u in ipairs({ "player", "party1", "party2", "party3", "party4" }) do
         pcall(scanUnit, u)

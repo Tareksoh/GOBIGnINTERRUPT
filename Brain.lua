@@ -111,6 +111,53 @@ local function fireAllReady(triggerSpell)
     end
 end
 
+-- (Re)schedule the end-of-cooldown event for an active (unit, spell).
+-- `capturedEndsAt` is the timer's ownership token: if state.endsAt later
+-- moves (a re-cast, or a peer "D" delta shortening the CD), the stale timer
+-- sees the mismatch and bails, while whoever moved endsAt schedules a fresh
+-- timer via this same function. This keeps inFlight / OnCDReady / the
+-- all-ready latch firing at the correct (possibly updated) time.
+local function scheduleReady(u, sid, capturedEndsAt)
+    local remaining = math.max(0.1, capturedEndsAt - GetTime())
+    C_Timer.After(remaining, function()
+        local s = state[u] and state[u][sid]
+        if not s then return end
+        -- >= 0.5 (not > 0.5) so the boundary matches UpdateRemaining /
+        -- pollPlayerDynamic, which reschedule when the move is >= 0.5s. At
+        -- exactly 0.5 the stale timer must bail so only the fresh one fires.
+        if type(s.endsAt) ~= "number" or math.abs(s.endsAt - capturedEndsAt) >= 0.5 then
+            return  -- endsAt moved; a newer timer owns the decrement
+        end
+        inFlight[sid] = math.max(0, (inFlight[sid] or 1) - 1)
+        log("Debug", "CD_READY unit=%s spell=%d inFlight=%d", u, sid, inFlight[sid])
+        if GBI.Bar and GBI.Bar.OnCDReady then GBI.Bar.OnCDReady(u, sid, s) end
+
+        if (not allReadyLatch) and M.IsSpellInAllReadyList(sid) and allReady() then
+            local set = effectiveSet()
+            local setSize = 0
+            for _ in pairs(set) do setSize = setSize + 1 end
+            local elapsed = burstStartAt and (GetTime() - burstStartAt) or 0
+            local pass = setSize >= BURST_MIN_SET
+                     and burstPeakInFlight >= BURST_MIN_PEAK
+                     and elapsed >= BURST_GUARD_S
+            if pass then
+                allReadyLatch = true
+                log("Info", "ALL READY  set=%d peak=%d elapsed=%.1fs (last: %d)",
+                    setSize, burstPeakInFlight, elapsed, sid)
+                fireAllReady(sid)
+            else
+                allReadyLatch = true       -- still re-arm latch, just no fire
+                log("Debug", "all-ready GATE-FAIL set=%d peak=%d elapsed=%.1fs " ..
+                    "(min set=%d peak=%d guard=%ds) - skipping fire",
+                    setSize, burstPeakInFlight, elapsed,
+                    BURST_MIN_SET, BURST_MIN_PEAK, BURST_GUARD_S)
+            end
+            burstStartAt = nil
+            burstPeakInFlight = 0
+        end
+    end)
+end
+
 -- overrideDuration: when set (peer-comm path), use the sender's already-
 -- adjusted duration verbatim instead of running TalentSync.AdjustCD again.
 -- The sender already applied their own talent CDR.
@@ -170,8 +217,13 @@ function M.OnCast(unit, spellID, cdEntry, overrideDuration, castedAt)
         if castedAt > oldest then effStart = castedAt end
     end
 
-    -- record CD state
+    -- record CD state. Capture whether an entry was already active first:
+    -- a re-cast while the previous ready timer is still pending must NOT
+    -- double-count inFlight, because the stale timer bails (endsAt moved)
+    -- without decrementing. Only a fresh activation bumps the counter.
     state[unit] = state[unit] or {}
+    local prev = state[unit][spellID]
+    local wasActive = prev and type(prev.endsAt) == "number" and prev.endsAt > now
     state[unit][spellID] = {
         startedAt  = effStart,
         endsAt     = effStart + effDur,
@@ -181,8 +233,10 @@ function M.OnCast(unit, spellID, cdEntry, overrideDuration, castedAt)
         fromPeer   = fromPeer,              -- peer broadcast vs local detection
     }
 
-    -- bump in-flight counter for this spell
-    inFlight[spellID] = (inFlight[spellID] or 0) + 1
+    -- bump in-flight counter for this spell (only on a fresh activation)
+    if not wasActive then
+        inFlight[spellID] = (inFlight[spellID] or 0) + 1
+    end
 
     -- Auto-source for burst-ready trigger: any BIGCD we ever see goes into
     -- the seen set. Members of the set must all be simultaneously ready
@@ -233,57 +287,10 @@ function M.OnCast(unit, spellID, cdEntry, overrideDuration, castedAt)
         GBI.CDComm.Broadcast(spellID, effDur, ch, chMax)
     end
 
-    -- schedule the end-of-cooldown event.
-    -- Use (endsAt - now), not effDur: when a cast was back-dated by Evidence
-    -- (aura.expirationTime - duration), endsAt is < now + effDur. Scheduling
-    -- the timer for the full effDur would fire late by however many seconds
-    -- the cast was back-dated, leaving inFlight, OnCDReady, and the
-    -- all-ready latch out of sync with the visual swipe (which uses endsAt
-    -- correctly via Bar.lua's SetCooldown(now, rem)).
-    local sid      = spellID
-    local u        = unit
-    local endsAt   = state[unit][spellID].endsAt
-    local remaining = math.max(0.1, endsAt - GetTime())
-
-    C_Timer.After(remaining, function()
-        local s = state[u] and state[u][sid]
-        if not s then return end
-        -- guard against re-cast: if endsAt drifted, this isn't the same
-        -- timer's owner anymore.
-        if math.abs(s.endsAt - endsAt) > 0.5 then return end
-
-        -- decrement in-flight
-        inFlight[sid] = math.max(0, (inFlight[sid] or 1) - 1)
-
-        log("Debug", "CD_READY unit=%s spell=%d inFlight=%d", u, sid, inFlight[sid])
-        if GBI.Bar and GBI.Bar.OnCDReady then GBI.Bar.OnCDReady(u, sid, s) end
-
-        -- only re-arm + fire if this spell is in the list, and the entire
-        -- list is now ready, and we previously broke the latch.
-        if (not allReadyLatch) and M.IsSpellInAllReadyList(sid) and allReady() then
-            local set = effectiveSet()
-            local setSize = 0
-            for _ in pairs(set) do setSize = setSize + 1 end
-            local elapsed = burstStartAt and (GetTime() - burstStartAt) or 0
-            local pass = setSize >= BURST_MIN_SET
-                     and burstPeakInFlight >= BURST_MIN_PEAK
-                     and elapsed >= BURST_GUARD_S
-            if pass then
-                allReadyLatch = true
-                log("Info", "ALL READY  set=%d peak=%d elapsed=%.1fs (last: %d)",
-                    setSize, burstPeakInFlight, elapsed, sid)
-                fireAllReady(sid)
-            else
-                allReadyLatch = true       -- still re-arm latch, just no fire
-                log("Debug", "all-ready GATE-FAIL set=%d peak=%d elapsed=%.1fs " ..
-                    "(min set=%d peak=%d guard=%ds) - skipping fire",
-                    setSize, burstPeakInFlight, elapsed,
-                    BURST_MIN_SET, BURST_MIN_PEAK, BURST_GUARD_S)
-            end
-            burstStartAt = nil
-            burstPeakInFlight = 0
-        end
-    end)
+    -- schedule the end-of-cooldown event. scheduleReady uses (endsAt - now)
+    -- so a back-dated Evidence cast fires on time, and it can be re-issued
+    -- by UpdateRemaining when a peer delta shortens the CD.
+    scheduleReady(unit, spellID, state[unit][spellID].endsAt)
 end
 
 function M.GetState(unit, spellID)
@@ -355,6 +362,12 @@ function M.UpdateRemaining(unit, spellID, remaining)
     if GBI.Bar and GBI.Bar.OnCDStart then
         GBI.Bar.OnCDStart(unit, spellID, s)   -- re-render with new endsAt
     end
+    -- Reschedule the ready timer for the new (shorter) endsAt. Without this
+    -- the original timer fires at the old time, sees endsAt moved, bails
+    -- without decrementing inFlight, and the CD lingers in-flight forever
+    -- (the all-ready latch never re-arms). scheduleReady's captured-endsAt
+    -- token makes the stale original timer a no-op.
+    scheduleReady(unit, spellID, newEnds)
 end
 
 -- Local-player polling: when SPELL_UPDATE_COOLDOWN fires, scan our active
@@ -380,6 +393,11 @@ local function pollPlayerDynamic()
                     if GBI.Bar and GBI.Bar.OnCDStart then
                         GBI.Bar.OnCDStart("player", sid, s)
                     end
+                    -- Reschedule the ready timer for the shortened endsAt
+                    -- (same fix as UpdateRemaining): otherwise the original
+                    -- timer bails on the mismatch and never decrements
+                    -- inFlight, leaking the player's own dynamic-CDR cooldown.
+                    scheduleReady("player", sid, realEnds)
                     if (now - (lastDeltaAt[sid] or 0)) >= DELTA_THROTTLE
                        and GBI.CDComm and GBI.CDComm.BroadcastDelta then
                         GBI.CDComm.BroadcastDelta(sid, math.max(0, realEnds - now))

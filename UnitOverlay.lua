@@ -298,6 +298,11 @@ M._relayout = relayout
 -- could use, regardless of whether it's been observed yet.
 function M.PopulatePlaceholders(unit)
     if not GBI.SpellsForUnit then return end
+    -- Skip the destructive prune when class can't be resolved (transient
+    -- race): otherwise SpellsForUnit returns empty and we'd clear every
+    -- live cooldown's state. Same fix as Bar.PopulatePlaceholders.
+    local _, classToken = UnitClass(unit)
+    if not classToken then return end
     local c = ensureContainer(unit)
     if not c then return end
 
@@ -308,6 +313,7 @@ function M.PopulatePlaceholders(unit)
     -- or user disabled it). Placeholders also hide when feature is off.
     local expected = {}
     for _, e in ipairs(GBI.SpellsForUnit(unit)) do expected[e.sid] = true end
+    if not next(expected) then return end   -- transient empty; don't wipe live icons
     for _, x in ipairs(c.icons) do
         if x.spellID and (not expected[x.spellID]
             or (x.placeholder and not placeholdersOn)) then
@@ -445,8 +451,23 @@ function M.Hide()
 end
 
 function M.Reset()
+    -- Clear per-icon state, not just visibility — otherwise a hidden entry
+    -- keeps its old spellID/endsAt/placeholder/charge/glow and OnCDStart's
+    -- "reuse entry for the same spell" scan can match stale data after a
+    -- /gbi reset or run change.
     for _, c in pairs(containers) do
-        for _, e in ipairs(c.icons) do e.icon:Hide() end
+        for _, e in ipairs(c.icons) do
+            e.icon:Hide()
+            e.spellID     = nil
+            e.endsAt      = nil
+            e.placeholder = false
+            if e.glowing and _G.ActionButton_HideOverlayGlow then
+                pcall(_G.ActionButton_HideOverlayGlow, e.icon)
+            end
+            e.glowing = false
+            if e.chargeText then e.chargeText:Hide() end
+            if e.cooldown then e.cooldown:SetCooldown(0, 0) end
+        end
     end
 end
 

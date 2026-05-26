@@ -106,6 +106,12 @@ local active = {}
 local lastScheduleAt = 0
 local SAME_CAST_WINDOW = 0.10
 
+-- Engine gate: the interrupt-halfway alert should only fire in the tracked
+-- context (M+ / showAlways), not in raids / open world / when disabled.
+local function engineOn()
+    return GBI.Bar and GBI.Bar.IsEngineEnabled and GBI.Bar.IsEngineEnabled() or false
+end
+
 local function isCandidateUnit(unit)
     if not unit then return false end
     if unit == "player" or unit == "pet" then return false end
@@ -131,6 +137,8 @@ local function fireIfStillValid(unit, castGUID, spellID)
     local a = active[unit]
     if not a or not safeEq(a.castGUID, castGUID) then return end
     active[unit] = nil
+
+    if not engineOn() then return end   -- engine turned off after scheduling
 
     if not playerInterruptReady() then
         log("Debug", "fire skip %s: kick on CD at trigger", unit); return
@@ -170,6 +178,7 @@ end
 local function onStart_inner(unit, castGUID, eventSpellID)
     -- Same-cast multi-token dedup
     if (GetTime() - lastScheduleAt) < SAME_CAST_WINDOW then return end
+    if not engineOn() then return end   -- no interrupt alerts outside M+/showAlways
     if not ensureCfg().enabled then return end
     if not isCandidateUnit(unit) then return end
 
